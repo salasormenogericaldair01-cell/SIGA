@@ -1,0 +1,52 @@
+{
+  "name": "sistema-gestion-academica-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Base del backend del Sistema de Gestión Académica",
+  "type": "commonjs",
+  "main": "src/app.js",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "jest --runInBand",
+    "test:integration": "node scripts/run-integration-tests.js",
+    "prisma:validate": "prisma validate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "seed:admin": "node scripts/seed-admin.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/setup.js"
+    ],
+    "roots": [
+      "<rootDir>/tests"
+    ],
+    "clearMocks": true
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcrypt": "6.0.0",
+    "cors": "2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "express-rate-limit": "8.7.0",
+    "helmet": "8.3.0",
+    "jsonwebtoken": "9.0.3",
+    "zod": "^4.6.5"
+  },
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.0"
+    }
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "prisma": "^6.19.3",
+    "supertest": "^7.3.0"
+  }
+}
