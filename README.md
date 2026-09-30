@@ -1,6 +1,6 @@
 # Sistema de Gestión Académica (SIGA)
 
-Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación, estructura académica, perfiles, matrículas, cursos, asignaciones docentes, calificaciones y asistencia. Aún no hay frontend.
+Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación, estructura académica, perfiles, matrículas, cursos, asignaciones docentes, calificaciones y asistencia. El frontend React permite operar estos módulos según el rol.
 
 ## Stack y estructura
 
@@ -151,3 +151,21 @@ Ejemplos de creación, con UUID reales de registros existentes:
 `GradeRecord` admite `term` de 1 a 4 y `value` `AD`, `A`, `B` o `C`. Una única calificación por curso, matrícula y bimestre es una **simplificación del MVP**; no hay competencias ni promedios automáticos. `AttendanceRecord` admite `PRESENT`, `ABSENT`, `LATE` o `JUSTIFIED`; la fecha debe ser real, estar dentro del periodo inclusive y no ser futura en `America/Lima`.
 
 La API deriva `sectionId` de la asignación para notas y asistencias. Dos claves foráneas compuestas por registro lo vinculan a la misma sección de la asignación y de la matrícula, también en PostgreSQL. Si ya existen notas o asistencias, **el MVP rechaza con 409 el traslado de esa matrícula**; no borra ni mueve los registros. Cambiar el docente conserva los registros y cambia inmediatamente su acceso. Los registros históricos siguen visibles dentro del alcance autorizado cuando un recurso se desactiva, pero las nuevas escrituras requieren estados activos.
+
+## Frontend (Sprint 5)
+
+El frontend usa React, Vite, Tailwind CSS y React Router. Requiere Node.js 24. Desde `frontend/`:
+
+```powershell
+npm ci
+Copy-Item .env.example .env
+npm run dev
+```
+
+Abre `http://localhost:5173`. El puerto es fijo y coincide con `CORS_ORIGIN=http://localhost:5173` del backend. `VITE_API_URL` apunta por defecto a `http://localhost:3000/api`; solo contiene la URL pública de la API. Inicia el backend desde `backend/` con `npm run dev` y su `.env` local. En PowerShell, usa `npm.cmd` si `npm.ps1` está bloqueado.
+
+El ADMIN gestiona usuarios, estructura, estudiantes, perfiles docentes, matrículas, cursos, asignaciones, notas y asistencia. SECRETARIA gestiona estructura, estudiantes, matrículas, cursos y asignaciones; consulta docentes, notas y asistencia. DOCENTE usa **Mi aula** para consultar sus asignaciones y matrículas, y registrar o corregir notas y asistencia individuales. ESTUDIANTE consulta sus propias notas y asistencia. Los listados paginados muestran el total y permiten avanzar de página; la estructura académica y usuarios no tienen paginación de servidor.
+
+La sesión guarda el JWT en memoria y `sessionStorage`, nunca en `localStorage`; se valida con `/auth/me` al abrir la aplicación. Un 401 limpia la sesión, mientras un 403 conserva la sesión y muestra el error. Cerrar sesión borra el token localmente, pero **no revoca** un JWT ya emitido. La autorización efectiva sigue en el backend. No existe registro público. Secretaría puede registrar un estudiante sin cuenta; solo ADMIN puede vincularlo a una cuenta ESTUDIANTE porque `/api/users` es exclusivo de ADMIN. Los selectores de perfiles docentes muestran cuentas DOCENTE activas aún no vinculadas.
+
+Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `frontend/`. Las pruebas usan HTTP simulado y no escriben en `siga` ni `siga_test`. El frontend no crea datos de demostración.
