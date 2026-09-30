@@ -1,6 +1,6 @@
 # Sistema de Gestión Académica (SIGA)
 
-Proyecto académico del curso de Seguridad Informática. Sprint 1: backend para usuarios, roles y autenticación de una institución con niveles Inicial, Primaria y Secundaria. No hay todavía frontend ni modelos académicos.
+Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación y la estructura académica de niveles, grados, periodos y secciones. Aún no hay frontend, matrículas, cursos ni calificaciones.
 
 ## Stack y estructura
 
@@ -23,7 +23,7 @@ Editar `.env` con una URL real de **PostgreSQL**, un `JWT_SECRET` aleatorio de a
 
 ## Bases de datos y migraciones
 
-El esquema define `Role` (`ADMIN`, `SECRETARIA`, `DOCENTE`, `ESTUDIANTE`) y `User`. La migración inicial está en `backend/prisma/migrations/`; prepararla en archivos **no implica** que esté aplicada. Usar una base de desarrollo `siga` y otra separada `siga_test`. No ejecutar tests de integración sobre desarrollo.
+El esquema define `Role`, `User`, `EducationLevel`, `Grade`, `AcademicPeriod` y `Section`. Las migraciones aditivas están en `backend/prisma/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
 
 Si se autoriza crear ambas bases nuevas en el PostgreSQL local de Windows, estos comandos solicitan la contraseña interactivamente y no la guardan en el repositorio:
 
@@ -62,8 +62,30 @@ Si el email normalizado ya existe, el script termina sin cambiar contraseña, ro
 | `POST /api/users` | ADMIN | Crear usuario (201) |
 | `GET /api/users` | ADMIN | Lista sin hashes |
 | `PATCH /api/users/:id/status` | ADMIN | Activar o desactivar otro usuario |
+| `GET /api/education-levels`, `/api/grades`, `/api/academic-periods`, `/api/sections` | ADMIN, SECRETARIA | Listar, incluidos inactivos |
+| `GET /api/{recurso}/:id` | ADMIN, SECRETARIA | Consultar detalle |
+| `POST /api/{recurso}` | ADMIN, SECRETARIA | Crear (201) |
+| `PATCH /api/{recurso}/:id` | ADMIN, SECRETARIA | Editar campos permitidos |
 
 El JWT dura por defecto una hora y solo contiene la identidad como `sub`. Cada petición protegida consulta la base para comprobar estado y rol vigentes. Desactivar una cuenta invalida sus tokens anteriores. No existe registro público.
+
+Los recursos académicos son `education-levels`, `grades`, `academic-periods` y `sections`. Todos admiten el filtro opcional `isActive=true|false`; grados admiten `educationLevelId` y secciones `gradeId` y `academicPeriodId`. Sin filtros se devuelven activos e inactivos, ordenados por creación e ID. No hay DELETE ni paginación. DOCENTE y ESTUDIANTE reciben 403 y una petición sin token recibe 401.
+
+Los niveles tienen códigos únicos `INICIAL`, `PRIMARIA` y `SECUNDARIA`. Cada grado tiene un `order` único dentro de su nivel: Inicial 3–5, Primaria 1–6 y Secundaria 1–5. Una sección es única por grado, periodo y nombre; el nombre se normaliza a mayúsculas. Los periodos requieren `startDate < endDate` con fechas `AAAA-MM-DD`, también al editar solo una fecha. La inactivación conserva los registros y referencias, pero impide crear grados o secciones asociados a registros inactivos. `isActive` no implica que sea el único periodo vigente.
+
+El seed académico es **manual** e idempotente: crea solo los tres niveles y sus 14 grados faltantes; conserva nombres y estados ya existentes y no crea periodos, secciones ni usuarios. Tras verificar que `DATABASE_URL` apunta a `siga` en el puerto 5433, ejecutar desde `backend/`:
+
+```powershell
+npm run seed:academic
+```
+
+Para verificar el estado de las migraciones:
+
+```powershell
+npx prisma migrate status
+```
+
+Repetir el comando con `DATABASE_URL` apuntando a `siga_test` para consultar esa base; el comando no aplica migraciones.
 
 ## Pruebas y seguridad
 
@@ -72,7 +94,7 @@ npm test
 npm audit
 ```
 
-`npm test` ejecuta Sprint 0 y pruebas HTTP con Prisma simulado; no demuestra una conexión real. Para probar PostgreSQL real, definir `TEST_DATABASE_URL` hacia la base separada **`siga_test`**, aplicar allí la migración y ejecutar:
+`npm test` ejecuta Sprint 0 y pruebas HTTP con Prisma simulado; no demuestra una conexión real. Para probar PostgreSQL real, definir `TEST_DATABASE_URL` hacia la base separada **`siga_test`**, aplicar allí las migraciones y ejecutar:
 
 ```powershell
 npm run test:integration

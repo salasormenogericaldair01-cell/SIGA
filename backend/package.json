@@ -16,7 +16,8 @@
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "seed:admin": "node scripts/seed-admin.js"
+    "seed:admin": "node scripts/seed-admin.js",
+    "seed:academic": "node scripts/seed-academic.js"
   },
   "jest": {
     "testEnvironment": "node",

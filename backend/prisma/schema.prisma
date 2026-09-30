@@ -14,6 +14,12 @@ enum Role {
   ESTUDIANTE
 }
 
+enum EducationLevelCode {
+  INICIAL
+  PRIMARIA
+  SECUNDARIA
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -24,4 +30,53 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model EducationLevel {
+  id        String             @id @default(uuid()) @db.Uuid
+  code      EducationLevelCode @unique
+  name      String
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  grades    Grade[]
+}
+
+model Grade {
+  id               String         @id @default(uuid()) @db.Uuid
+  educationLevelId String         @db.Uuid
+  educationLevel   EducationLevel @relation(fields: [educationLevelId], references: [id])
+  name             String
+  order            Int
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  sections         Section[]
+
+  @@unique([educationLevelId, order])
+}
+
+model AcademicPeriod {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @unique
+  startDate DateTime  @db.Date
+  endDate   DateTime  @db.Date
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  sections  Section[]
+}
+
+model Section {
+  id               String         @id @default(uuid()) @db.Uuid
+  gradeId          String         @db.Uuid
+  grade            Grade          @relation(fields: [gradeId], references: [id])
+  academicPeriodId String         @db.Uuid
+  academicPeriod   AcademicPeriod @relation(fields: [academicPeriodId], references: [id])
+  name             String
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([gradeId, academicPeriodId, name])
 }
