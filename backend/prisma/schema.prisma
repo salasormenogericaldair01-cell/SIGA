@@ -25,6 +25,20 @@ enum EnrollmentStatus {
   CANCELLED
 }
 
+enum GradeValue {
+  AD
+  A
+  B
+  C
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  JUSTIFIED
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -76,16 +90,17 @@ model AcademicPeriod {
 }
 
 model Section {
-  id               String         @id @default(uuid()) @db.Uuid
-  gradeId          String         @db.Uuid
-  grade            Grade          @relation(fields: [gradeId], references: [id])
-  academicPeriodId String         @db.Uuid
-  academicPeriod   AcademicPeriod @relation(fields: [academicPeriodId], references: [id])
-  name             String
-  isActive         Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  enrollments      Enrollment[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  gradeId             String               @db.Uuid
+  grade               Grade                @relation(fields: [gradeId], references: [id])
+  academicPeriodId    String               @db.Uuid
+  academicPeriod      AcademicPeriod       @relation(fields: [academicPeriodId], references: [id])
+  name                String
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  enrollments         Enrollment[]
+  teachingAssignments TeachingAssignment[]
 
   @@unique([gradeId, academicPeriodId, name])
   @@unique([id, academicPeriodId])
@@ -106,25 +121,87 @@ model Student {
 }
 
 model Teacher {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique @db.Uuid
-  user      User     @relation(fields: [userId], references: [id])
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String               @id @default(uuid()) @db.Uuid
+  userId              String               @unique @db.Uuid
+  user                User                 @relation(fields: [userId], references: [id])
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  teachingAssignments TeachingAssignment[]
 }
 
 model Enrollment {
-  id               String           @id @default(uuid()) @db.Uuid
-  studentId        String           @db.Uuid
-  student          Student          @relation(fields: [studentId], references: [id])
-  sectionId        String           @db.Uuid
-  academicPeriodId String           @db.Uuid
-  section          Section          @relation(fields: [sectionId, academicPeriodId], references: [id, academicPeriodId])
-  academicPeriod   AcademicPeriod   @relation(fields: [academicPeriodId], references: [id])
-  status           EnrollmentStatus @default(ACTIVE)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                String             @id @default(uuid()) @db.Uuid
+  studentId         String             @db.Uuid
+  student           Student            @relation(fields: [studentId], references: [id])
+  sectionId         String             @db.Uuid
+  academicPeriodId  String             @db.Uuid
+  section           Section            @relation(fields: [sectionId, academicPeriodId], references: [id, academicPeriodId])
+  academicPeriod    AcademicPeriod     @relation(fields: [academicPeriodId], references: [id])
+  status            EnrollmentStatus   @default(ACTIVE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  gradeRecords      GradeRecord[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([studentId, academicPeriodId])
+  @@unique([id, sectionId])
+}
+
+model Course {
+  id                  String               @id @default(uuid()) @db.Uuid
+  code                String               @unique
+  name                String
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  teachingAssignments TeachingAssignment[]
+}
+
+model TeachingAssignment {
+  id                String             @id @default(uuid()) @db.Uuid
+  courseId          String             @db.Uuid
+  course            Course             @relation(fields: [courseId], references: [id])
+  sectionId         String             @db.Uuid
+  section           Section            @relation(fields: [sectionId], references: [id])
+  teacherId         String             @db.Uuid
+  teacher           Teacher            @relation(fields: [teacherId], references: [id])
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  gradeRecords      GradeRecord[]
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([courseId, sectionId])
+  @@unique([id, sectionId])
+}
+
+model GradeRecord {
+  id                   String             @id @default(uuid()) @db.Uuid
+  teachingAssignmentId String             @db.Uuid
+  enrollmentId         String             @db.Uuid
+  sectionId            String             @db.Uuid
+  teachingAssignment   TeachingAssignment @relation(fields: [teachingAssignmentId, sectionId], references: [id, sectionId], onUpdate: Restrict)
+  enrollment           Enrollment         @relation(fields: [enrollmentId, sectionId], references: [id, sectionId], onUpdate: Restrict)
+  term                 Int
+  value                GradeValue
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([teachingAssignmentId, enrollmentId, term])
+}
+
+model AttendanceRecord {
+  id                   String             @id @default(uuid()) @db.Uuid
+  teachingAssignmentId String             @db.Uuid
+  enrollmentId         String             @db.Uuid
+  sectionId            String             @db.Uuid
+  teachingAssignment   TeachingAssignment @relation(fields: [teachingAssignmentId, sectionId], references: [id, sectionId], onUpdate: Restrict)
+  enrollment           Enrollment         @relation(fields: [enrollmentId, sectionId], references: [id, sectionId], onUpdate: Restrict)
+  date                 DateTime           @db.Date
+  status               AttendanceStatus
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([teachingAssignmentId, enrollmentId, date])
 }

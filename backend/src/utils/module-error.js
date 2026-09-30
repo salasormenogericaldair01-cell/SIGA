@@ -9,12 +9,18 @@ function respond(error, res) {
   if (error instanceof ModuleError) return res.status(error.status).json({ message: error.message });
   if (error.code === 'P2002') return res.status(409).json({ message: 'Registro duplicado' });
   if (error.code === 'P2003') {
-    const composite = String(error.meta?.field_name || '').includes('Enrollment_sectionId_academicPeriodId_fkey');
+    const field = String(error.meta?.field_name || '');
+    const composite = field.includes('Enrollment_sectionId_academicPeriodId_fkey') ||
+      /^(GradeRecord|AttendanceRecord)_(enrollmentId|teachingAssignmentId)_sectionId_fkey/.test(field);
     return res.status(composite ? 409 : 404).json({ message: composite ? 'Conflicto de asociación' : 'Referencia no encontrada' });
   }
   if (error.code === 'P2025') return res.status(404).json({ message: 'Recurso no encontrado' });
   if (error.code === 'P2004') return res.status(409).json({ message: 'Conflicto de asociación' });
   if (error.code === 'P2034') return res.status(409).json({ message: 'Conflicto concurrente; vuelve a intentar' });
+  if (typeof error.message === 'string' &&
+      /(?:GradeRecord|AttendanceRecord)_enrollmentId_sectionId_fkey/.test(error.message)) {
+    return res.status(409).json({ message: 'La matrícula tiene registros académicos asociados' });
+  }
   throw error;
 }
 

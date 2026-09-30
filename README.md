@@ -1,6 +1,6 @@
 # Sistema de Gestión Académica (SIGA)
 
-Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación, estructura académica, perfiles de estudiantes y docentes, y matrículas. Aún no hay frontend, cursos ni calificaciones.
+Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación, estructura académica, perfiles, matrículas, cursos, asignaciones docentes, calificaciones y asistencia. Aún no hay frontend.
 
 ## Stack y estructura
 
@@ -23,7 +23,7 @@ Editar `.env` con una URL real de **PostgreSQL**, un `JWT_SECRET` aleatorio de a
 
 ## Bases de datos y migraciones
 
-El esquema define `Role`, `User`, `EducationLevel`, `Grade`, `AcademicPeriod`, `Section`, `Student`, `Teacher` y `Enrollment`. Las migraciones aditivas están en `backend/prisma/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
+El esquema define usuarios, estructura académica, perfiles, matrículas, cursos, asignaciones, `GradeRecord` y `AttendanceRecord`. Las migraciones aditivas están en `backend/prisma/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
 
 Si se autoriza crear ambas bases nuevas en el PostgreSQL local de Windows, estos comandos solicitan la contraseña interactivamente y no la guardan en el repositorio:
 
@@ -72,6 +72,15 @@ Si el email normalizado ya existe, el script termina sin cambiar contraseña, ro
 | `POST /api/teachers`, `PATCH /api/teachers/:id` | ADMIN | Crear perfil o cambiar su estado |
 | `GET /api/enrollments`, `/api/enrollments/:id` | ADMIN, SECRETARIA | Listar paginado o consultar matrícula |
 | `POST /api/enrollments`, `PATCH /api/enrollments/:id` | ADMIN, SECRETARIA | Matricular, trasladar, cancelar o reactivar |
+| `GET /api/courses`, `/api/courses/:id` | ADMIN, SECRETARIA, DOCENTE | Catálogo paginado y detalle |
+| `POST /api/courses`, `PATCH /api/courses/:id` | ADMIN, SECRETARIA | Crear o editar curso |
+| `GET /api/teaching-assignments`, `/api/teaching-assignments/:id` | ADMIN, SECRETARIA; DOCENTE solo propias | Asignaciones paginadas y detalle |
+| `GET /api/teaching-assignments/:id/enrollments` | ADMIN, SECRETARIA; DOCENTE solo propia | Matrículas de la sección, paginadas |
+| `POST /api/teaching-assignments`, `PATCH /api/teaching-assignments/:id` | ADMIN, SECRETARIA | Crear, reasignar docente o cambiar estado |
+| `GET /api/grade-records`, `/api/grade-records/:id` | ADMIN, SECRETARIA; DOCENTE propias; ESTUDIANTE propias | Notas paginadas y detalle |
+| `POST /api/grade-records`, `PATCH /api/grade-records/:id` | ADMIN; DOCENTE propias | Crear o corregir valor |
+| `GET /api/attendance-records`, `/api/attendance-records/:id` | ADMIN, SECRETARIA; DOCENTE propias; ESTUDIANTE propias | Asistencia paginada y detalle |
+| `POST /api/attendance-records`, `PATCH /api/attendance-records/:id` | ADMIN; DOCENTE propias | Crear o corregir estado |
 
 El JWT dura por defecto una hora y solo contiene la identidad como `sub`. Cada petición protegida consulta la base para comprobar estado y rol vigentes. Desactivar una cuenta invalida sus tokens anteriores. No existe registro público.
 
@@ -125,3 +134,20 @@ Ejemplos de cuerpos JSON para crear cada recurso:
 ```
 
 El periodo de una matrícula se deriva de la sección. `Enrollment` tiene unicidad por estudiante y periodo, incluso si está `CANCELLED`. Para volver a matricular en ese periodo se reactiva la matrícula existente. Un traslado solo puede usar otra sección del mismo periodo. La base también impide inconsistencias mediante la clave foránea compuesta `Enrollment(sectionId, academicPeriodId)` → `Section(id, academicPeriodId)`, respaldada por una restricción única en `Section`; la aplicación valida además que los recursos estén activos al crear, trasladar o reactivar. Cancelar no elimina datos, y desactivar un estudiante o docente no modifica su cuenta ni cancela matrículas automáticamente.
+
+## Cursos, calificaciones y asistencia
+
+Los cuatro listados nuevos usan `data` y `pagination` (`page`, `limit`, `total`, `totalPages`). `page` empieza en 1 y `limit` admite 1–100. Cursos filtran por `search` e `isActive`; asignaciones por `courseId`, `sectionId`, `teacherId`, `academicPeriodId` e `isActive`; notas por `teachingAssignmentId`, `enrollmentId`, `academicPeriodId` y `term`; asistencia por los tres IDs. Las asignaciones solo pueden usar curso, sección, grado, nivel, periodo y docente activos; el docente debe tener cuenta activa de rol DOCENTE. El DOCENTE consulta exclusivamente sus asignaciones actuales, y el ESTUDIANTE exclusivamente los registros de su perfil. Este alcance se aplica antes de contar y paginar y también en los detalles y ediciones.
+
+Ejemplos de creación, con UUID reales de registros existentes:
+
+```json
+{ "code": "MAT", "name": "Matemática" }
+{ "courseId": "<uuid-curso>", "sectionId": "<uuid-seccion>", "teacherId": "<uuid-perfil-docente>" }
+{ "teachingAssignmentId": "<uuid-asignacion>", "enrollmentId": "<uuid-matricula>", "term": 1, "value": "A" }
+{ "teachingAssignmentId": "<uuid-asignacion>", "enrollmentId": "<uuid-matricula>", "date": "2026-09-29", "status": "PRESENT" }
+```
+
+`GradeRecord` admite `term` de 1 a 4 y `value` `AD`, `A`, `B` o `C`. Una única calificación por curso, matrícula y bimestre es una **simplificación del MVP**; no hay competencias ni promedios automáticos. `AttendanceRecord` admite `PRESENT`, `ABSENT`, `LATE` o `JUSTIFIED`; la fecha debe ser real, estar dentro del periodo inclusive y no ser futura en `America/Lima`.
+
+La API deriva `sectionId` de la asignación para notas y asistencias. Dos claves foráneas compuestas por registro lo vinculan a la misma sección de la asignación y de la matrícula, también en PostgreSQL. Si ya existen notas o asistencias, **el MVP rechaza con 409 el traslado de esa matrícula**; no borra ni mueve los registros. Cambiar el docente conserva los registros y cambia inmediatamente su acceso. Los registros históricos siguen visibles dentro del alcance autorizado cuando un recurso se desactiva, pero las nuevas escrituras requieren estados activos.

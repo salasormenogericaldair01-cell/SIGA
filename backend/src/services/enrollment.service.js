@@ -62,6 +62,15 @@ async function update(id, data) {
   return prisma.$transaction(async (db) => {
     const current = await db.enrollment.findUnique({ where: { id } });
     if (!current) throw new ModuleError(404, 'Matrícula no encontrada');
+    if (data.sectionId && data.sectionId !== current.sectionId) {
+      const [grades, attendance] = await Promise.all([
+        db.gradeRecord.count({ where: { enrollmentId: id } }),
+        db.attendanceRecord.count({ where: { enrollmentId: id } }),
+      ]);
+      if (grades > 0 || attendance > 0) {
+        throw new ModuleError(409, 'La matrícula tiene notas o asistencias en su sección actual');
+      }
+    }
     if (data.sectionId !== undefined || data.status === 'ACTIVE') {
       await requireActiveStudent(db, current.studentId);
       const section = await requireActiveSection(db, data.sectionId || current.sectionId);
