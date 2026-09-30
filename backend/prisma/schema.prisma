@@ -20,6 +20,11 @@ enum EducationLevelCode {
   SECUNDARIA
 }
 
+enum EnrollmentStatus {
+  ACTIVE
+  CANCELLED
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -30,6 +35,8 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  student      Student?
+  teacher      Teacher?
 }
 
 model EducationLevel {
@@ -57,14 +64,15 @@ model Grade {
 }
 
 model AcademicPeriod {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String    @unique
-  startDate DateTime  @db.Date
-  endDate   DateTime  @db.Date
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  sections  Section[]
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique
+  startDate   DateTime     @db.Date
+  endDate     DateTime     @db.Date
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  sections    Section[]
+  enrollments Enrollment[]
 }
 
 model Section {
@@ -77,6 +85,46 @@ model Section {
   isActive         Boolean        @default(true)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+  enrollments      Enrollment[]
 
   @@unique([gradeId, academicPeriodId, name])
+  @@unique([id, academicPeriodId])
+}
+
+model Student {
+  id          String       @id @default(uuid()) @db.Uuid
+  studentCode String       @unique
+  firstName   String
+  lastName    String
+  birthDate   DateTime     @db.Date
+  userId      String?      @unique @db.Uuid
+  user        User?        @relation(fields: [userId], references: [id])
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  enrollments Enrollment[]
+}
+
+model Teacher {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Enrollment {
+  id               String           @id @default(uuid()) @db.Uuid
+  studentId        String           @db.Uuid
+  student          Student          @relation(fields: [studentId], references: [id])
+  sectionId        String           @db.Uuid
+  academicPeriodId String           @db.Uuid
+  section          Section          @relation(fields: [sectionId, academicPeriodId], references: [id, academicPeriodId])
+  academicPeriod   AcademicPeriod   @relation(fields: [academicPeriodId], references: [id])
+  status           EnrollmentStatus @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([studentId, academicPeriodId])
 }

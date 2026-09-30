@@ -1,6 +1,6 @@
 # Sistema de Gestión Académica (SIGA)
 
-Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación y la estructura académica de niveles, grados, periodos y secciones. Aún no hay frontend, matrículas, cursos ni calificaciones.
+Proyecto académico del curso de Seguridad Informática. El backend incluye usuarios, roles, autenticación, estructura académica, perfiles de estudiantes y docentes, y matrículas. Aún no hay frontend, cursos ni calificaciones.
 
 ## Stack y estructura
 
@@ -23,7 +23,7 @@ Editar `.env` con una URL real de **PostgreSQL**, un `JWT_SECRET` aleatorio de a
 
 ## Bases de datos y migraciones
 
-El esquema define `Role`, `User`, `EducationLevel`, `Grade`, `AcademicPeriod` y `Section`. Las migraciones aditivas están en `backend/prisma/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
+El esquema define `Role`, `User`, `EducationLevel`, `Grade`, `AcademicPeriod`, `Section`, `Student`, `Teacher` y `Enrollment`. Las migraciones aditivas están en `backend/prisma/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
 
 Si se autoriza crear ambas bases nuevas en el PostgreSQL local de Windows, estos comandos solicitan la contraseña interactivamente y no la guardan en el repositorio:
 
@@ -66,6 +66,12 @@ Si el email normalizado ya existe, el script termina sin cambiar contraseña, ro
 | `GET /api/{recurso}/:id` | ADMIN, SECRETARIA | Consultar detalle |
 | `POST /api/{recurso}` | ADMIN, SECRETARIA | Crear (201) |
 | `PATCH /api/{recurso}/:id` | ADMIN, SECRETARIA | Editar campos permitidos |
+| `GET /api/students`, `/api/students/:id` | ADMIN, SECRETARIA | Listar paginado o consultar estudiante |
+| `POST /api/students`, `PATCH /api/students/:id` | ADMIN, SECRETARIA | Crear o editar estudiante |
+| `GET /api/teachers`, `/api/teachers/:id` | ADMIN, SECRETARIA | Listar paginado o consultar docente |
+| `POST /api/teachers`, `PATCH /api/teachers/:id` | ADMIN | Crear perfil o cambiar su estado |
+| `GET /api/enrollments`, `/api/enrollments/:id` | ADMIN, SECRETARIA | Listar paginado o consultar matrícula |
+| `POST /api/enrollments`, `PATCH /api/enrollments/:id` | ADMIN, SECRETARIA | Matricular, trasladar, cancelar o reactivar |
 
 El JWT dura por defecto una hora y solo contiene la identidad como `sub`. Cada petición protegida consulta la base para comprobar estado y rol vigentes. Desactivar una cuenta invalida sus tokens anteriores. No existe registro público.
 
@@ -100,6 +106,22 @@ npm audit
 npm run test:integration
 ```
 
-El runner rechaza URLs que no apunten a `siga_test`; la prueba confirma `current_database()` antes de escribir y elimina únicamente los usuarios que creó. Si la base no está preparada, el comando falla explícitamente. Helmet, CORS de origen explícito, límite JSON de 100 kB, manejo seguro de errores y rate limit protegen las rutas; CORS no sustituye la autenticación.
+El runner rechaza URLs que no apunten a `siga_test`; cada prueba confirma `current_database()` antes de escribir y limpia únicamente sus propios registros. La prueba del seed académico revierte todos sus cambios mediante una transacción. Si la base no está preparada, el comando falla explícitamente. Helmet, CORS de origen explícito, límite JSON de 100 kB, manejo seguro de errores y rate limit protegen las rutas; CORS no sustituye la autenticación.
 
 `package.json` aplica un `override` limitado de `deepmerge-ts` 8.0.0 dentro de Prisma por [GHSA-ggr8-5vv4-36mx](https://github.com/advisories/GHSA-ggr8-5vv4-36mx). Volver a verificar este ajuste al actualizar Prisma.
+
+## Perfiles y matrículas
+
+Las listas de estudiantes y docentes admiten `search`, `isActive=true|false`, `page` y `limit` (1–100). La lista de matrículas admite `studentId`, `sectionId`, `academicPeriodId`, `status`, `page` y `limit`. La respuesta de listas usa `data` y `pagination: { page, limit, total, totalPages }`, con orden estable por creación e ID.
+
+Un Student puede existir sin usuario. Su código se normaliza a mayúsculas y no se cambia después; `birthDate` usa `AAAA-MM-DD` y no puede estar en el futuro. `PATCH /api/students/:id` acepta `userId` de una cuenta ESTUDIANTE activa o `null` para desvincularla. Un Teacher requiere una cuenta DOCENTE activa y obtiene de ella nombre y email. Ninguno de estos endpoints crea cuentas ni devuelve `passwordHash`.
+
+Ejemplos de cuerpos JSON para crear cada recurso:
+
+```json
+{ "studentCode": "EST-001", "firstName": "Ana", "lastName": "Pérez", "birthDate": "2012-05-14" }
+{ "userId": "<uuid-de-usuario-docente>" }
+{ "studentId": "<uuid-de-estudiante>", "sectionId": "<uuid-de-seccion>" }
+```
+
+El periodo de una matrícula se deriva de la sección. `Enrollment` tiene unicidad por estudiante y periodo, incluso si está `CANCELLED`. Para volver a matricular en ese periodo se reactiva la matrícula existente. Un traslado solo puede usar otra sección del mismo periodo. La base también impide inconsistencias mediante la clave foránea compuesta `Enrollment(sectionId, academicPeriodId)` → `Section(id, academicPeriodId)`, respaldada por una restricción única en `Section`; la aplicación valida además que los recursos estén activos al crear, trasladar o reactivar. Cancelar no elimina datos, y desactivar un estudiante o docente no modifica su cuenta ni cancela matrículas automáticamente.
