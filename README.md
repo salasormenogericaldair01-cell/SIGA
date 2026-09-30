@@ -169,3 +169,5 @@ El ADMIN gestiona usuarios, estructura, estudiantes, perfiles docentes, matrícu
 La sesión guarda el JWT en memoria y `sessionStorage`, nunca en `localStorage`; se valida con `/auth/me` al abrir la aplicación. Un 401 limpia la sesión, mientras un 403 conserva la sesión y muestra el error. Cerrar sesión borra el token localmente, pero **no revoca** un JWT ya emitido. La autorización efectiva sigue en el backend. No existe registro público. Secretaría puede registrar un estudiante sin cuenta; solo ADMIN puede vincularlo a una cuenta ESTUDIANTE porque `/api/users` es exclusivo de ADMIN. Los selectores de perfiles docentes muestran cuentas DOCENTE activas aún no vinculadas.
 
 Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `frontend/`. Las pruebas usan HTTP simulado y no escriben en `siga` ni `siga_test`. El frontend no crea datos de demostración.
+
+La verificación final y el guion manual del MVP están en [docs/demo.md](docs/demo.md). El seed DEMO se ejecuta manualmente y nunca de forma automática en `siga`.

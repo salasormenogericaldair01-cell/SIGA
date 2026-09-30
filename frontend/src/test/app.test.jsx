@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { AuthProvider } from '../auth/AuthContext';
+import { ReferenceField } from '../components/Ui';
 
 const admin = { id: '00000000-0000-4000-8000-000000000001', firstName: 'Ana', lastName: 'Admin', email: 'ana@test.edu', role: 'ADMIN' };
 const secretary = { ...admin, role: 'SECRETARIA' };
@@ -161,5 +163,45 @@ describe('sesión y navegación', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Registro duplicado');
     expect(screen.getByLabelText('Código')).toHaveValue('MAT');
     expect(screen.getByLabelText('Nombre')).toHaveValue('Matemática');
+  });
+
+  it('permite avanzar y volver en un selector con listado paginado', async () => {
+    sessionStorage.setItem('siga_token', 'previo');
+    global.fetch = vi.fn((url) => {
+      const parsed = new URL(url);
+      if (parsed.pathname === '/api/auth/me') return Promise.resolve(json(200, { user: admin }));
+      if (parsed.pathname === '/api/courses') {
+        const page = Number(parsed.searchParams.get('page'));
+        return Promise.resolve(json(200, {
+          data: page === 1 ? [{ id: 'course-1', name: 'Curso inicial' }] : [{ id: 'course-2', name: 'Curso final' }],
+          pagination: { page, limit: 100, total: 101, totalPages: 2 },
+        }));
+      }
+      return Promise.resolve(json(500, {}));
+    });
+    render(<AuthProvider><label htmlFor="course-selector">Curso</label><ReferenceField field={{ key: 'courseId', label: 'Curso', type: 'ref', resource: 'courses' }} value="" onChange={vi.fn()} id="course-selector" /></AuthProvider>);
+    expect(await screen.findByRole('option', { name: 'Curso inicial' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Más opciones' }));
+    expect(await screen.findByRole('option', { name: 'Curso final' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Opciones anteriores' }));
+    expect(await screen.findByRole('option', { name: 'Curso inicial' })).toBeInTheDocument();
+  });
+
+  it('descarta filas y filtros del módulo anterior al cambiar de recurso', async () => {
+    sessionStorage.setItem('siga_token', 'previo');
+    global.fetch = vi.fn((url) => {
+      const parsed = new URL(url);
+      if (parsed.pathname === '/api/auth/me') return Promise.resolve(json(200, { user: admin }));
+      if (parsed.pathname === '/api/courses') return Promise.resolve(json(200, { data: [{ id: 'course-1', code: 'DEMO-MAT', name: 'Matemática', isActive: true }], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } }));
+      if (parsed.pathname === '/api/grade-records') return Promise.resolve(json(200, { data: [{ id: 'record-1', term: 1, value: 'A', teachingAssignment: { course: { name: 'Matemática' } }, enrollment: { student: { firstName: 'Demo', lastName: 'Alumna' } } }], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } }));
+      if (['/api/academic-periods', '/api/grades', '/api/sections', '/api/education-levels'].includes(parsed.pathname)) return Promise.resolve(json(200, { items: [] }));
+      return Promise.resolve(json(200, { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }));
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Cursos' }));
+    expect(await screen.findByText('DEMO-MAT')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'Calificaciones' }));
+    expect(await screen.findByRole('cell', { name: 'A' })).toBeInTheDocument();
+    expect(screen.queryByText('DEMO-MAT')).not.toBeInTheDocument();
   });
 });

@@ -17,7 +17,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "seed:admin": "node scripts/seed-admin.js",
-    "seed:academic": "node scripts/seed-academic.js"
+    "seed:academic": "node scripts/seed-academic.js",
+    "verify:demo-target": "node scripts/verify-demo-target.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "cleanup:demo-test": "node scripts/cleanup-demo-test.js"
   },
   "jest": {
     "testEnvironment": "node",

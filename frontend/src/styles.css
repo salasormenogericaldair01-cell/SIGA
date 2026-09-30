@@ -74,6 +74,7 @@ body { margin: 0; min-width: 320px; }
 .btn-danger:hover { background: #991B1B; }
 .text-link { border: 0; background: none; color: #172554; font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .text-link:hover { color: #C2410C; }
+.reference-pagination { display: flex; justify-content: space-between; gap: 12px; }
 .input { display: block; width: 100%; min-width: 0; min-height: 40px; padding: 8px 11px; border: 1px solid #CBD5E1; border-radius: 7px; background: #fff; color: #0F172A; font-size: 13px; }
 .input::placeholder { color: #64748B; }
 .input:disabled { background: #F1F5F9; }

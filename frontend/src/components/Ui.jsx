@@ -108,7 +108,10 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
       {value && !options.some((option) => option.id === value) && <option value={value}>Selección actual</option>}
       {options.map((option) => <option key={option.id} value={option.id}>{field.resource.endsWith('-users') ? `${option.firstName} ${option.lastName} · ${option.email}` : refLabel(field.resource, option)}</option>)}
     </select>
-    {more && <button type="button" className="text-link" onClick={() => setPage(page + 1)}>Más opciones</button>}
+    {(page > 1 || more) && <div className="reference-pagination">
+      {page > 1 && <button type="button" className="text-link" onClick={() => setPage(page - 1)}>Opciones anteriores</button>}
+      {more && <button type="button" className="text-link" onClick={() => setPage(page + 1)}>Más opciones</button>}
+    </div>}
     <Notice message={error} />
   </div>;
 }

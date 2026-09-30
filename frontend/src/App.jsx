@@ -25,7 +25,7 @@ function AppRoutes() {
     <Route path="/sin-permiso" element={<Protected><div className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-bold">Sin permisos</h1><p>No tienes acceso a este módulo.</p></div></Protected>} />
     <Route element={<Protected><Layout /></Protected>}><Route index element={<Dashboard />} />
       <Route path="mi-aula" element={<Protected roles={['DOCENTE']}><TeacherClassroom /></Protected>} />
-      {Object.entries(resources).map(([key, resource]) => <Route key={key} path={key} element={<Protected roles={resource.roles}><ResourcePage resourceKey={key} /></Protected>} />)}
+      {Object.entries(resources).map(([key, resource]) => <Route key={key} path={key} element={<Protected roles={resource.roles}><ResourcePage key={key} resourceKey={key} /></Protected>} />)}
       <Route path="*" element={<div><h1 className="text-2xl font-bold">Página no encontrada</h1><p>Vuelve al inicio desde el menú.</p></div>} />
     </Route>
   </Routes>;
