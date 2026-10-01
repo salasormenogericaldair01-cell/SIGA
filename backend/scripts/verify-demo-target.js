@@ -1,8 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 
 async function verifyTarget(prisma, expected = process.env.DEMO_TARGET) {
-  if (!['siga', 'siga_test', 'siga_demo'].includes(expected)) {
-    throw new Error('DEMO_TARGET debe ser siga, siga_test o siga_demo');
+  if (!['siga', 'siga_test', 'siga_demo_egx3'].includes(expected)) {
+    throw new Error('DEMO_TARGET debe ser siga, siga_test o siga_demo_egx3');
   }
   let url;
   try {
@@ -14,7 +14,7 @@ async function verifyTarget(prisma, expected = process.env.DEMO_TARGET) {
     || decodeURIComponent(url.pathname) !== `/${expected}`) {
     throw new Error('DATABASE_URL no coincide con la base DEMO declarada');
   }
-  const cloud = expected === 'siga_demo';
+  const cloud = expected === 'siga_demo_egx3';
   if (cloud) {
     // El host debe declararse por separado para evitar sembrar otra base por accidente.
     if (!process.env.DEMO_DATABASE_HOST

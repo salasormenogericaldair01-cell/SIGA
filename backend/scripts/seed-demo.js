@@ -131,7 +131,7 @@ async function main() {
       const attendanceWhere = { teachingAssignmentId_enrollmentId_date: { teachingAssignmentId: assignments[key].id, enrollmentId: enrollments[key].id, date } };
       if (!await tx.attendanceRecord.findUnique({ where: attendanceWhere })) remember('attendanceRecord', await tx.attendanceRecord.create({ data: { teachingAssignmentId: assignments[key].id, enrollmentId: enrollments[key].id, sectionId: sections[key].id, date, status: 'PRESENT' } }));
     }
-  });
+  }, { maxWait: 10000, timeout: 120000 });
 
   const file = manifestPath(target);
   const previous = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};

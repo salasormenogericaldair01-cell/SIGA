@@ -1,10 +1,10 @@
 # Despliegue de la demo SIGA
 
-Esta guía prepara una **demo académica con datos ficticios**. No crea servicios ni publica código por sí sola. La base de Render debe ser independiente de `siga` y `siga_test` locales y llamarse exactamente `siga_demo`. Revisa el plan antes de crearla: la [base gratuita de Render caduca a los 30 días](https://render.com/docs/service-types).
+Esta guía prepara una **demo académica con datos ficticios**. No crea servicios ni publica código por sí sola. El backend publicado responde en `https://siga-lud0.onrender.com`; la base de Render informada para esta demo se llama exactamente `siga_demo_egx3`, independiente de `siga` y `siga_test` locales. Comprueba el plan y vigencia de la base: la [base gratuita de Render caduca a los 30 días](https://render.com/docs/service-types).
 
 ## 1. PostgreSQL en Render
 
-En Render, crea un servicio **Postgres** separado con **Database Name: `siga_demo`**. Elige la misma región que el futuro servicio web. Anota, en tu gestor local de secretos, las URL **Internal** y **External** y sus respectivos hosts; no las copies al repositorio. La API en Render usará la URL interna. Para ejecutar el seed desde tu equipo usarás temporalmente la externa con `sslmode=require` y acceso de red limitado a tu IP; después podrás restringir o desactivar ese acceso externo. Render usa PostgreSQL en el puerto 5432. [Conexiones de Render Postgres](https://render.com/docs/postgresql-creating-connecting).
+La base ya creada tiene **Database Name: `siga_demo_egx3`** y puerto **5432**. Anota, en tu gestor local de secretos, las URL **Internal** y **External** y sus respectivos hosts; no las copies al repositorio. La API en Render usa la URL interna. Para verificar y sembrar desde tu equipo usarás temporalmente la externa con `sslmode=require` y acceso de red limitado a tu IP; después podrás restringir o desactivar ese acceso externo. [Conexiones de Render Postgres](https://render.com/docs/postgresql-creating-connecting).
 
 ## 2. API en Render
 
@@ -25,8 +25,8 @@ Configura estas variables en **Environment** del servicio web:
 
 | Variable | Valor que debes completar |
 | --- | --- |
-| `DATABASE_URL` | URL **Internal** de `siga_demo`; comprueba el nombre final de la base |
-| `DEMO_TARGET` | `siga_demo` |
+| `DATABASE_URL` | URL **Internal** de `siga_demo_egx3`; comprueba el nombre final de la base |
+| `DEMO_TARGET` | `siga_demo_egx3` |
 | `DEMO_DATABASE_HOST` | Solo el host de esa URL Internal, sin protocolo, puerto, usuario ni contraseña |
 | `NODE_ENV` | `production` |
 | `JWT_SECRET` | Secreto aleatorio nuevo de al menos 32 caracteres, solo en Render |
@@ -49,23 +49,40 @@ Importa el mismo repositorio como proyecto **Vite** y completa:
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | Node.js Version | `24.x` |
-| Environment Variable `VITE_API_URL` | `https://<tu-api>.onrender.com/api` |
+| Environment Variable `VITE_API_URL` | `https://siga-lud0.onrender.com/api` |
 
 `frontend/vercel.json` reescribe las rutas de React Router hacia `index.html`, por lo que una recarga de `/login` o `/students` no debe devolver 404. `VITE_API_URL` es pública y se incorpora al JavaScript durante el build; **no pongas contraseñas, tokens ni secretos en variables `VITE_*`**. Al conocer el dominio final de Vercel, actualiza `CORS_ORIGIN` en Render con ese origen exacto y vuelve a desplegar la API. Los dominios de preview de Vercel no quedan permitidos automáticamente. [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Root Directory](https://vercel.com/docs/builds/configure-a-build).
 
 ## 4. Seed manual con contraseñas locales
 
-Desde `backend/`, crea un archivo local **ignorado por Git** llamado `.env.demo.cloud` con `DATABASE_URL` igual a la URL **External** de la nueva base, `DEMO_TARGET=siga_demo` y `DEMO_DATABASE_HOST` igual al host exacto de esa URL. Mantén las seis variables `DEMO_*_PASSWORD` actuales en `.env.demo`; no las copies a Vercel, Render ni al código. Si trabajas en otro worktree, coloca allí una copia local e ignorada de `.env.demo` o ejecuta el seed desde el checkout que ya lo contiene. Node 24 permite cargar ambos archivos en orden, de modo que `.env.demo.cloud` sustituya solo el destino local:
+Desde `backend/` del worktree de preparación, guarda la **External Database URL** en `.env.demo.cloud`, archivo local ignorado por Git. Deja estas tres variables, completando las dos vacías desde la URL externa de Render **en tu editor, nunca por chat**:
+
+```dotenv
+DEMO_TARGET=siga_demo_egx3
+DEMO_DATABASE_HOST=
+DATABASE_URL=
+```
+
+`DEMO_DATABASE_HOST` es solo el host de la URL externa, sin usuario, contraseña, protocolo ni puerto. La URL debe nombrar `siga_demo_egx3`, usar el puerto 5432 y requerir TLS con `sslmode=require`. Mantén las seis variables `DEMO_*_PASSWORD` actuales en el `.env.demo` ignorado del checkout principal; no copies sus valores a Vercel, Render, el código ni este worktree. Node 24 permite cargar ese archivo por ruta y luego `.env.demo.cloud`, que sustituye el destino local.
+
+**Primero, solo lectura:**
 
 ```powershell
 cd backend
 node --env-file=.env.demo.cloud scripts/verify-demo-target.js
 node --env-file=.env.demo.cloud ./node_modules/prisma/build/index.js migrate status
-node --env-file=.env.demo --env-file=.env.demo.cloud scripts/seed-demo.js
 ```
 
-Ejecuta el seed **solo después** de que las migraciones estén aplicadas y el verificador confirme `siga_demo` en el puerto 5432. El seed usa las contraseñas locales existentes, valida sus reglas, crea registros DEMO de forma idempotente y se detiene ante colisiones incompatibles; no cambia contraseñas ni usuarios existentes. No ejecutes `cleanup:demo-test` en la nube: esa limpieza está limitada a `siga_test`. El manifiesto local del seed queda ignorado por Git. Si una cuenta DEMO ya existe con otra contraseña o rol, investiga la colisión; no fuerces una sobrescritura.
+El verificador consulta `current_database()` y `inet_server_port()`; debe confirmar `siga_demo_egx3` y 5432 antes de cualquier escritura. Como el build de Render puede haber aplicado las migraciones, **consulta el estado antes de desplegarlas otra vez**. Estos comandos quedan preparados para una ejecución manual posterior, cuando hayas revisado el resultado anterior:
+
+```powershell
+node --env-file=.env.demo.cloud scripts/verify-demo-target.js
+node --env-file=.env.demo.cloud ./node_modules/prisma/build/index.js migrate deploy
+node --env-file=../../../backend/.env.demo --env-file=.env.demo.cloud scripts/seed-demo.js
+```
+
+La última ruta reutiliza las contraseñas ignoradas del checkout principal cuando trabajas desde un worktree bajo `.worktrees/`; si ejecutas desde un checkout que ya contiene `backend/.env.demo`, usa `--env-file=.env.demo` en su lugar. Ejecuta el seed **solo después** de aplicar las migraciones. Valida sus reglas, crea registros DEMO de forma idempotente y se detiene ante colisiones incompatibles; no cambia contraseñas ni usuarios existentes. No ejecutes `cleanup:demo-test` en la nube: esa limpieza está limitada a `siga_test`. El manifiesto local del seed queda ignorado por Git. Si una cuenta DEMO ya existe con otra contraseña o rol, investiga la colisión; no fuerces una sobrescritura.
 
 ## Comprobación antes de compartir la URL
 
-Comprueba `GET /api/health`, login y `GET /api/auth/me` en la API; desde Vercel, recarga una ruta interna y prueba los módulos de cada rol. Verifica que el navegador no tenga errores de CORS ni contenido mixto, que el limitador de login funciona detrás del proxy y que el seed se ejecutó solo en `siga_demo`. Usa exclusivamente datos ficticios. Esta demo académica no sustituye una revisión de seguridad, privacidad, respaldos y recuperación para datos reales; las brechas están en [seguridad-y-normativa.md](seguridad-y-normativa.md).
+Comprueba `GET /api/health`, login y `GET /api/auth/me` en la API; desde Vercel, recarga una ruta interna y prueba los módulos de cada rol. Verifica que el navegador no tenga errores de CORS ni contenido mixto, que el limitador de login funciona detrás del proxy y que el seed se ejecutó solo en `siga_demo_egx3`. Usa exclusivamente datos ficticios. Esta demo académica no sustituye una revisión de seguridad, privacidad, respaldos y recuperación para datos reales; las brechas están en [seguridad-y-normativa.md](seguridad-y-normativa.md).
