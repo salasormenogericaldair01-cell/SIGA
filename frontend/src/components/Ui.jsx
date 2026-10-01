@@ -32,8 +32,8 @@ export function DataTable({ columns, rows, renderCell, renderActions }) {
   return <table className="data-table"><thead><tr>{columns.map(([, label]) => <th scope="col" key={label}>{label}</th>)}<th scope="col">Acciones</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{columns.map(([key, label]) => <td key={key} data-label={label}>{renderCell(row, key)}</td>)}<td data-label="Acciones" className="row-actions">{renderActions(row)}</td></tr>)}</tbody></table>;
 }
 
-export function FilterPanel({ children, onSubmit }) {
-  return <form className="filter-panel" onSubmit={onSubmit}>{children}<Button variant="secondary" type="submit" className="filter-submit">Aplicar filtros</Button></form>;
+export function FilterPanel({ children, onSubmit, onClear }) {
+  return <form className="filter-panel" onSubmit={onSubmit}>{children}<div className="filter-actions">{onClear && <Button variant="secondary" onClick={onClear}>Limpiar</Button>}<Button variant="secondary" type="submit" className="filter-submit">Aplicar filtros</Button></div></form>;
 }
 
 export function ConfirmDialog({ title, message, onCancel, onConfirm, busy }) {

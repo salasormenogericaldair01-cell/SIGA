@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { AuthProvider } from '../auth/AuthContext';
@@ -12,6 +12,18 @@ const json = (status, body) => ({ ok: status >= 200 && status < 300, status, jso
 function mockApi(handler) { global.fetch = vi.fn((url, options = {}) => handler(new URL(url).pathname, options)); }
 
 describe('sesión y navegación', () => {
+  it('permite mostrar y ocultar la contraseña sin alterar su valor', () => {
+    mockApi(() => json(401, { message: 'Credenciales inválidas' }));
+    render(<App />);
+    const password = screen.getByLabelText('Contraseña');
+    fireEvent.change(password, { target: { value: 'frase-de-prueba' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar contraseña' }));
+    expect(password).toHaveAttribute('type', 'text');
+    expect(password).toHaveValue('frase-de-prueba');
+    fireEvent.click(screen.getByRole('button', { name: 'Ocultar contraseña' }));
+    expect(password).toHaveAttribute('type', 'password');
+  });
+
   it('inicia sesión y consulta /auth/me antes de mostrar el panel', async () => {
     mockApi((path) => path === '/api/auth/login' ? json(200, { token: 'token-local', user: admin }) : json(200, { user: admin }));
     render(<App />);
@@ -136,6 +148,23 @@ describe('sesión y navegación', () => {
     expect(screen.getByLabelText('Nombres')).toBeInTheDocument();
     expect(screen.getByLabelText('Fecha de nacimiento')).toBeInTheDocument();
     expect(document.getElementById('field-isActive')).toHaveValue('true');
+  });
+
+  it('limpia un filtro aplicado y vuelve a consultar la lista completa', async () => {
+    sessionStorage.setItem('siga_token', 'previo');
+    mockApi((path) => path === '/api/auth/me' ? json(200, { user: secretary }) : json(200, { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Estudiantes' }));
+    const search = screen.getByLabelText('Buscar por código o nombre');
+    fireEvent.change(search, { target: { value: 'Ana' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }));
+    await waitFor(() => expect(global.fetch.mock.calls.some(([url]) => new URL(url).searchParams.get('search') === 'Ana')).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar' }));
+    expect(search).toHaveValue('');
+    await waitFor(() => {
+      const calls = global.fetch.mock.calls.filter(([url]) => new URL(url).pathname === '/api/students');
+      expect(new URL(calls.at(-1)[0]).searchParams.has('search')).toBe(false);
+    });
   });
 
   it('docente no consulta catálogos administrativos para filtrar asignaciones', async () => {

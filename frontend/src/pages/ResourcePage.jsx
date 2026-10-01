@@ -122,23 +122,24 @@ export default function ResourcePage({ resourceKey }) {
     catch (failure) { setError(failure.message); }
   }
   function applyFilters(event) { event.preventDefault(); setPage(1); setFilter(Object.fromEntries(Object.entries(draft).filter(([, value]) => value !== ''))); }
+  function clearFilters() { setDraft({}); setFilter({}); setPage(1); }
   function saved(message) { setEditor(undefined); setDetail(null); setSuccess(message); reload(); }
   const readableTitle = user.role === 'ESTUDIANTE' ? resourceKey === 'grade-records' ? 'Mis calificaciones' : 'Mi asistencia' : resource.title;
   const activeFilter = ['education-levels', 'grades', 'academic-periods', 'sections', 'students', 'teachers', 'courses', 'teaching-assignments'].includes(resourceKey);
   const renderCell = (row, key) => key === 'isActive' || (resourceKey === 'enrollments' && key === 'status') ? <StatusBadge value={row[key]} /> : displayValue(row, key, referenceRows);
 
   return <div>
-    <PageHeader title={readableTitle} subtitle={isStudent ? 'Consulta y administra los perfiles de estudiantes.' : `Consulta ${resource.title.toLowerCase()} según tus permisos.`} action={canCreateHere && <Button icon="plus" onClick={() => { setEditor(null); setSuccess(''); }}>{isStudent ? 'Registrar estudiante' : 'Crear registro'}</Button>} />
+    <PageHeader eyebrow={user.role === 'ESTUDIANTE' ? 'Mi información' : 'Módulos de SIGA'} title={readableTitle} subtitle={isStudent ? 'Encuentra estudiantes por nombre o código y mantén sus datos al día.' : `Consulta ${resource.title.toLowerCase()} según tus permisos.`} action={canCreateHere && <Button icon="plus" onClick={() => { setEditor(null); setSuccess(''); }}>{isStudent ? 'Registrar estudiante' : 'Crear registro'}</Button>} />
     <Notice message={success} kind="success" /><Notice message={error} />
     {user.role === 'SECRETARIA' && isStudent && <Notice kind="info" message="Puedes registrar estudiantes sin cuenta. La vinculación de una cuenta requiere un administrador." />}
-    {(resource.search || resource.filters || resource.paginated) && <FilterPanel onSubmit={applyFilters}>
+    {(resource.search || resource.filters || resource.paginated) && <FilterPanel onSubmit={applyFilters} onClear={Object.values(draft).some((value) => value !== '') || Object.keys(filter).length ? clearFilters : undefined}>
       {resource.search && <div className="filter-search"><label className="label" htmlFor="search">{isStudent ? 'Buscar por código o nombre' : 'Buscar'}</label><div className="relative"><Icon name="search" size={16} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input id="search" className="input pl-9" placeholder={isStudent ? 'Código o nombre' : 'Buscar'} value={draft.search || ''} onChange={(e) => setDraft((v) => ({ ...v, search: e.target.value }))} /></div></div>}
       {activeFilter && <div><label className="label" htmlFor="active-filter">Estado</label><select id="active-filter" className="input" value={draft.isActive || ''} onChange={(e) => setDraft((v) => ({ ...v, isActive: e.target.value }))}><option value="">Todos</option><option value="true">Activos</option><option value="false">Inactivos</option></select></div>}
       {allowedFilters.map((field) => <div key={field.key}><label className="label" htmlFor={`filter-${field.key}`}>{field.label}</label>{field.type === 'ref' ? <ReferenceField field={{ ...field, filter: true }} id={`filter-${field.key}`} value={draft[field.key] || ''} onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))} /> : <select id={`filter-${field.key}`} className="input" value={draft[field.key] || ''} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">Todos</option>{field.options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>}</div>)}
     </FilterPanel>}
     {detail && <section className="panel panel-pad mb-4"><div className="resource-editor-heading"><h2>Detalle</h2><button type="button" className="icon-button" aria-label="Cerrar detalle" onClick={() => setDetail(null)}><Icon name="close" size={16} /></button></div><dl className="grid gap-3 sm:grid-cols-2">{resource.columns.map(([key, label]) => <div key={key}><dt className="label">{label}</dt><dd>{renderCell(detail, key)}</dd></div>)}</dl></section>}
     <div className={`resource-body ${editor !== undefined ? 'has-editor' : ''}`}>
-      <section className="panel resource-list"><div className="resource-list-heading"><h2>Listado de registros</h2><span>{pagination ? `Mostrando ${rows.length} de ${pagination.total}` : `${rows.length} registros`}</span></div>
+      <section className="panel resource-list"><div className="resource-list-heading"><h2>Resultados</h2><span>{pagination ? `Mostrando ${rows.length} de ${pagination.total}` : `${rows.length} registros`}</span></div>
         {loading ? <Spinner /> : rows.length === 0 ? <EmptyState /> : <DataTable columns={resource.columns} rows={rows} renderCell={renderCell} renderActions={(row) => <><button type="button" className="text-link" onClick={() => showDetail(row)}>Ver</button>{canWrite && user.role !== 'DOCENTE' && <button type="button" className="text-link" onClick={() => { setEditor(row); setSuccess(''); }}>Editar</button>}</>} />}
         <Pager pagination={pagination} onPage={setPage} />
       </section>

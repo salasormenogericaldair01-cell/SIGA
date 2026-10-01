@@ -20,8 +20,12 @@ const paths = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
+  eye: <><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
+  eyeOff: <><path d="M3 3l18 18M10.6 6.1A12 12 0 0 1 12 6c6.4 0 10 6 10 6a13 13 0 0 1-3.2 3.6M6.3 6.3C3.5 8.2 2 12 2 12s3.6 6 10 6c1.5 0 2.8-.3 4-.8" /><path d="M10 10a3 3 0 0 0 4 4" /></>,
 };
 
+const aliases = { 'education-levels': 'levels', 'academic-periods': 'periods', 'teaching-assignments': 'assignments' };
+
 export default function Icon({ name, size = 18, className = '' }) {
-  return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{paths[name] || paths.info}</svg>;
+  return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{paths[aliases[name] || name] || paths.info}</svg>;
 }

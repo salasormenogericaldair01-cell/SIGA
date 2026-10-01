@@ -38,7 +38,7 @@ async function expectStatus(pathname, token, status, method = 'GET', body) {
 async function uiLogin(page, email, password) {
   await page.goto(`${frontendBase}/login`);
   await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña').fill(password);
+  await page.getByLabel('Contraseña', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Ingresar' }).click();
   await page.getByText('Bienvenido, Demo').waitFor();
 }
@@ -104,6 +104,7 @@ try {
   await page.goto(`${frontendBase}/login`);
   await page.screenshot({ path: path.join(os.tmpdir(), 'siga-mvp-login.png') });
   await uiLogin(page, ...credentials.admin);
+  await page.getByRole('link', { name: 'Ir a estudiantes' }).waitFor();
   const tokens = { admin: await page.evaluate(() => sessionStorage.getItem('siga_token')) };
   for (const [key, [email, password]] of Object.entries(credentials)) {
     if (key !== 'admin') tokens[key] = await login(email, password);
@@ -174,7 +175,7 @@ try {
   await page.getByRole('button', { name: 'Crear registro' }).click();
   const newEmail = `demo-e2e-${suffix}@siga.invalid`;
   await page.getByLabel('Correo').fill(newEmail);
-  await page.getByLabel('Contraseña').fill(process.env.DEMO_ESTUDIANTE_A_PASSWORD);
+  await page.getByLabel('Contraseña', { exact: true }).fill(process.env.DEMO_ESTUDIANTE_A_PASSWORD);
   await page.getByLabel('Nombre').fill('Demo');
   await page.getByLabel('Apellido').fill('E2E');
   await page.getByLabel('Rol').selectOption('ESTUDIANTE');
@@ -200,12 +201,18 @@ try {
     page.getByRole('button', { name: 'Aplicar filtros' }).click(),
   ]);
   assert.equal((await filteredStudents.json()).pagination.total, 1);
+  const [clearedStudents] = await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === '/api/students' && !new URL(response.url()).searchParams.has('search')),
+    page.getByRole('button', { name: 'Limpiar' }).click(),
+  ]);
+  assert.equal(await page.getByLabel('Buscar por código o nombre').inputValue(), '');
+  assert((await clearedStudents.json()).pagination.total >= 2);
 
   await openModule(page, 'Usuarios');
   await page.getByRole('button', { name: 'Crear registro' }).click();
   const teacherEmail = `demo-e2e-teacher-${suffix}@siga.invalid`;
   await page.getByLabel('Correo').fill(teacherEmail);
-  await page.getByLabel('Contraseña').fill(process.env.DEMO_DOCENTE_A_PASSWORD);
+  await page.getByLabel('Contraseña', { exact: true }).fill(process.env.DEMO_DOCENTE_A_PASSWORD);
   await page.getByLabel('Nombre').fill('Demo');
   await page.getByLabel('Apellido').fill('Docente E2E');
   await page.getByLabel('Rol').selectOption('DOCENTE');
@@ -290,6 +297,7 @@ try {
   const mobilePage = await mobile.newPage();
   watchPage(mobilePage, errors);
   await uiSession(mobilePage, tokens.secretaria);
+  await mobilePage.getByRole('link', { name: 'Ir a estudiantes' }).waitFor();
   await mobilePage.getByRole('button', { name: 'Abrir menú' }).click();
   await mobilePage.screenshot({ path: path.join(os.tmpdir(), 'siga-mvp-menu-mobile.png') });
   await mobilePage.locator('.mobile-nav').getByRole('link', { name: 'Estudiantes' }).click();
@@ -313,6 +321,7 @@ try {
   const teacherPage = await desktop.newPage();
   watchPage(teacherPage, errors);
   await uiSession(teacherPage, tokens.docenteA);
+  await teacherPage.getByRole('link', { name: 'Abrir mi aula' }).waitFor();
   await teacherPage.locator('aside').getByRole('link', { name: 'Mi aula' }).click();
   await teacherPage.getByRole('heading', { name: 'Mis asignaciones' }).waitFor();
   await teacherPage.getByText('DEMO Matemática').first().click();
@@ -360,6 +369,7 @@ try {
   const studentPage = await desktop.newPage();
   watchPage(studentPage, errors);
   await uiSession(studentPage, tokens.estudianteA);
+  await studentPage.getByRole('link', { name: 'Ver mis calificaciones' }).waitFor();
   await studentPage.locator('aside').getByRole('link', { name: 'Mis calificaciones' }).click();
   await studentPage.getByText('DEMO Matemática').first().waitFor();
   await studentPage.locator('aside').getByRole('link', { name: 'Mi asistencia' }).click();
