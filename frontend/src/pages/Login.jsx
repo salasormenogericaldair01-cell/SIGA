@@ -22,7 +22,7 @@ export default function Login() {
   }
   return <main className="login-shell">
     <div className="login-layout">
-      <aside className="login-visual" aria-label="Presentación de SIGA"><img src="/images/campus-referencial.png" alt="" /><div className="login-visual-shade" /><div className="login-visual-content"><span className="login-visual-badge">Sistema de Gestión Académica</span><h2>La gestión académica, en un solo lugar.</h2><p>Accede a tus actividades y a la información académica que necesitas.</p></div></aside>
+      <div className="login-visual" aria-hidden="true"><img src="/images/campus-referencial.png" alt="" /><div className="login-visual-shade" /></div>
       <section className="login-form-side"><div className="login-form-inner">
         <Brand />
         <div className="login-heading"><p className="page-eyebrow">Bienvenido a SIGA</p><h1>Ingresa a tu cuenta</h1><p>Escribe el correo y la contraseña de tu cuenta SIGA.</p></div>
@@ -33,7 +33,7 @@ export default function Login() {
           <Notice message={error} /><Button type="submit" disabled={busy}>{busy ? 'Ingresando…' : 'Ingresar'}<Icon name="chevronRight" size={18} /></Button>
         </form>
         <p className="login-help">¿No puedes ingresar? Solicita ayuda a quien administra tu cuenta SIGA.</p>
-      </div><p className="login-footer">SIGA · Sistema de Gestión Académica</p></section>
+      </div></section>
     </div>
   </main>;
 }
