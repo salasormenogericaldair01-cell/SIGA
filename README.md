@@ -175,6 +175,8 @@ Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `fro
 
 La verificación final y el guion manual del MVP están en [docs/demo.md](docs/demo.md). El seed DEMO se ejecuta manualmente y nunca de forma automática en `siga`.
 
+La configuración para una demo en Vercel y Render está en [docs/despliegue-demo.md](docs/despliegue-demo.md). No crea recursos en la nube ni ejecuta el seed automáticamente.
+
 El fundamento de seguridad, protección de datos y las brechas frente a la normativa peruana se documentan en [docs/seguridad-y-normativa.md](docs/seguridad-y-normativa.md).
 
 La identidad gráfica de SIGA en `frontend/src/components/Brand.jsx` y `frontend/public/brand-mark.svg` es propia de este proyecto; no es el escudo de una institución educativa. La imagen de campus en `frontend/public/images/campus-referencial.png` fue generada para la interfaz y se usa como ilustración decorativa. No representa una institución real.

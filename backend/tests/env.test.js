@@ -7,6 +7,7 @@ test.each([
   ['BCRYPT_ROUNDS', { BCRYPT_ROUNDS: '9' }],
   ['CORS_ORIGIN', { CORS_ORIGIN: '*' }],
   ['DATABASE_URL', { DATABASE_URL: 'sqlite://localhost/siga' }],
+  ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: '2' }],
 ])('rechaza configuración inválida de %s sin revelar valores', (field, overrides) => {
   const result = spawnSync(process.execPath, ['-e', "require('./src/config/env')"], {
     cwd: path.join(__dirname, '..'),

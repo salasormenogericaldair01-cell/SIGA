@@ -18,6 +18,7 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().regex(/^[1-9]\d*(?:s|m|h|d)$/).default('1h'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14).default(12),
   CORS_ORIGIN: originSchema,
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(1).default(0),
 });
 
 const result = envSchema.safeParse({
@@ -28,6 +29,7 @@ const result = envSchema.safeParse({
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || undefined,
   BCRYPT_ROUNDS: process.env.BCRYPT_ROUNDS || undefined,
   CORS_ORIGIN: process.env.CORS_ORIGIN,
+  TRUST_PROXY_HOPS: process.env.TRUST_PROXY_HOPS || undefined,
 });
 
 if (!result.success) {

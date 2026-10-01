@@ -10,8 +10,9 @@ function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN }));
+  app.use(cors({ origin: (origin, done) => done(null, !origin || origin === env.CORS_ORIGIN) }));
   app.use(express.json({ limit: '100kb' }));
 
   app.use('/api', createRouter());
