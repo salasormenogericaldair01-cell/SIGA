@@ -183,7 +183,7 @@ body { margin: 0; min-width: 320px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 
-/* Renovación visual: identidad provisional SIGA, fotografía referencial y tareas claras. */
+/* Identidad visual de SIGA. */
 :root { --navy: #172554; --ink: #10203b; --orange: #c2410c; --line: #dce4ef; --surface: #fff; --muted: #52627a; }
 body { background: #f3f6fb; }
 .skip-link { position: fixed; top: -60px; left: 16px; z-index: 1000; padding: 10px 14px; border-radius: 9px; background: #fff; color: var(--navy); font-weight: 700; }
@@ -230,7 +230,6 @@ body { background: #f3f6fb; }
 .dashboard-hero-content > p:not(.hero-eyebrow) { max-width: 490px; margin: 13px 0 22px; color: #e4eafa; font-size: 14px; line-height: 1.55; }
 .hero-action { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 10px 16px; border-radius: 9px; background: #fff; color: #172554; font-size: 13px; font-weight: 800; text-decoration: none; transition: transform .16s, background .16s; }
 .hero-action:hover { transform: translateY(-2px); background: #fff7ed; }
-.image-caption { position: absolute; right: 15px; bottom: 12px; padding: 4px 7px; border-radius: 5px; background: rgba(11,22,48,.66); color: #fff; font-size: 10px; }
 .dashboard-intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin: 32px 0 4px; }
 .dashboard-intro h2 { margin: 0; color: var(--ink); font-size: 24px; font-weight: 800; letter-spacing: -.025em; }
 .dashboard-intro > p { max-width: 370px; margin: 0 0 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }

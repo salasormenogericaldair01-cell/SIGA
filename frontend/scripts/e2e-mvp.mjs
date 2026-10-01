@@ -172,7 +172,7 @@ try {
   await page.reload();
   await page.getByText('Bienvenido, Demo').waitFor();
   await openModule(page, 'Usuarios');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear usuario' }).click();
   const newEmail = `demo-e2e-${suffix}@siga.invalid`;
   await page.getByLabel('Correo').fill(newEmail);
   await page.getByLabel('Contraseña', { exact: true }).fill(process.env.DEMO_ESTUDIANTE_A_PASSWORD);
@@ -189,7 +189,7 @@ try {
   await page.getByLabel('Nombres').fill('Demo');
   await page.getByLabel('Apellidos').fill('E2E');
   await page.getByLabel('Fecha de nacimiento').fill('2015-05-15');
-  await page.getByLabel('Cuenta ESTUDIANTE (opcional)').selectOption(newUser.id);
+  await page.getByLabel('Cuenta de estudiante (opcional)').selectOption(newUser.id);
   await page.screenshot({ path: path.join(os.tmpdir(), 'siga-mvp-students-desktop.png') });
   const newStudent = await createFromEditor(page, '/students', 'student');
   const createdStudents = await expectStatus(`/students?search=DEMO-E2E-${suffix}`, tokens.admin, 200);
@@ -209,7 +209,7 @@ try {
   assert((await clearedStudents.json()).pagination.total >= 2);
 
   await openModule(page, 'Usuarios');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear usuario' }).click();
   const teacherEmail = `demo-e2e-teacher-${suffix}@siga.invalid`;
   await page.getByLabel('Correo').fill(teacherEmail);
   await page.getByLabel('Contraseña', { exact: true }).fill(process.env.DEMO_DOCENTE_A_PASSWORD);
@@ -220,13 +220,13 @@ try {
   assert((await expectStatus('/users', tokens.admin, 200)).users.some((item) => item.id === teacherUser.id && item.email === teacherEmail));
 
   await openModule(page, 'Docentes');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear perfil docente' }).click();
   await page.getByLabel('Cuenta docente').selectOption(teacherUser.id);
   const teacherProfile = await createFromEditor(page, '/teachers', 'teacher');
   assert((await expectStatus(`/teachers?search=${encodeURIComponent(teacherEmail)}`, tokens.admin, 200)).data.some((item) => item.id === teacherProfile.id));
 
   await openModule(page, 'Periodos');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear periodo académico' }).click();
   const periodName = `DEMO-E2E-${suffix}`;
   await page.getByLabel('Nombre').fill(periodName);
   await page.getByLabel('Inicio').fill(`${limaDate.slice(0, 4)}-01-01`);
@@ -237,7 +237,7 @@ try {
   const grade = (await expectStatus('/grades', tokens.admin, 200)).items.find((item) => item.educationLevelId === assignmentA.section.grade.educationLevel.id && item.order === 1);
   assert(grade);
   await openModule(page, 'Secciones');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear sección' }).click();
   await page.locator('.resource-editor').getByLabel('Grado', { exact: true }).selectOption(grade.id);
   await page.locator('.resource-editor').getByLabel('Periodo', { exact: true }).selectOption(newPeriod.id);
   await page.locator('.resource-editor').getByLabel('Sección').fill(`DEMO-E2E-${suffix}`);
@@ -245,7 +245,7 @@ try {
   assert((await expectStatus(`/sections?academicPeriodId=${newPeriod.id}`, tokens.admin, 200)).items.some((item) => item.id === newSection.id && item.name === `DEMO-E2E-${suffix.toUpperCase()}`));
 
   await openModule(page, 'Cursos');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear curso' }).click();
   await page.getByLabel('Código', { exact: true }).fill('DEMO-MAT');
   await page.getByLabel('Nombre').fill('DEMO duplicado');
   await page.getByRole('button', { name: 'Guardar' }).click();
@@ -257,7 +257,7 @@ try {
   assert((await expectStatus(`/courses?search=${courseCode}`, tokens.admin, 200)).data.some((item) => item.id === newCourse.id));
 
   await openModule(page, 'Asignaciones');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Crear asignación docente' }).click();
   await page.locator('.resource-editor').getByLabel('Curso', { exact: true }).selectOption(newCourse.id);
   await page.locator('.resource-editor').getByLabel('Sección', { exact: true }).selectOption(newSection.id);
   await page.locator('.resource-editor').getByLabel('Docente', { exact: true }).selectOption(teacherProfile.id);
@@ -265,14 +265,14 @@ try {
   assert((await expectStatus(`/teaching-assignments?courseId=${newCourse.id}`, tokens.admin, 200)).data.some((item) => item.id === newAssignment.id && item.sectionId === newSection.id));
 
   await openModule(page, 'Matrículas');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Registrar matrícula' }).click();
   await page.locator('.resource-editor').getByLabel('Estudiante', { exact: true }).selectOption(newStudent.id);
   await page.locator('.resource-editor').getByLabel('Sección', { exact: true }).selectOption(newSection.id);
   const newEnrollment = await createFromEditor(page, '/enrollments', 'enrollment');
   assert((await expectStatus(`/enrollments?studentId=${newStudent.id}`, tokens.admin, 200)).data.some((item) => item.id === newEnrollment.id && item.sectionId === newSection.id));
 
   await openModule(page, 'Calificaciones');
-  await page.getByRole('button', { name: 'Crear registro' }).click();
+  await page.getByRole('button', { name: 'Registrar calificación' }).click();
   await page.locator('.resource-editor').getByLabel('Asignación', { exact: true }).selectOption(newAssignment.id);
   await page.locator('.resource-editor').getByLabel('Matrícula', { exact: true }).selectOption(newEnrollment.id);
   await page.locator('.resource-editor').getByLabel('Bimestre').selectOption('1');
@@ -289,7 +289,7 @@ try {
   await page.getByText('Cambios guardados.').waitFor();
   assert.equal((await expectStatus(`/grade-records/${adminRecord.id}`, tokens.admin, 200)).data.value, 'AD');
 
-  await page.getByRole('button', { name: 'Salir' }).click();
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click();
   await page.goto(`${frontendBase}/users`);
   await page.getByRole('button', { name: 'Ingresar' }).waitFor();
 
@@ -312,7 +312,7 @@ try {
   const secretaryStudent = await createFromEditor(mobilePage, '/students', 'student');
   await mobilePage.getByRole('button', { name: 'Abrir menú' }).click();
   await mobilePage.locator('.mobile-nav').getByRole('link', { name: 'Matrículas' }).click();
-  await mobilePage.getByRole('button', { name: 'Crear registro' }).click();
+  await mobilePage.getByRole('button', { name: 'Registrar matrícula' }).click();
   await mobilePage.locator('.resource-editor').getByLabel('Estudiante', { exact: true }).selectOption(secretaryStudent.id);
   await mobilePage.locator('.resource-editor').getByLabel('Sección', { exact: true }).selectOption(assignmentB.sectionId);
   await createFromEditor(mobilePage, '/enrollments', 'enrollment');

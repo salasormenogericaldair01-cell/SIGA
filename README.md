@@ -172,4 +172,4 @@ Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `fro
 
 La verificación final y el guion manual del MVP están en [docs/demo.md](docs/demo.md). El seed DEMO se ejecuta manualmente y nunca de forma automática en `siga`.
 
-La interfaz usa una marca **provisional de SIGA** en `frontend/src/components/Brand.jsx` y `frontend/public/brand-mark.svg`. Cuando la institución proporcione su nombre y escudo oficiales, reemplaza esos recursos sin alterar las rutas ni permisos. La fotografía de `frontend/public/images/campus-referencial.png` fue generada para esta interfaz, se identifica como imagen referencial y no representa una institución real.
+La identidad gráfica de SIGA en `frontend/src/components/Brand.jsx` y `frontend/public/brand-mark.svg` es propia de este proyecto; no es el escudo de una institución educativa. La imagen de campus en `frontend/public/images/campus-referencial.png` fue generada para la interfaz y se usa como ilustración decorativa. No representa una institución real.

@@ -44,11 +44,11 @@ export default function Layout() {
   const section = location.pathname === '/' ? 'Inicio' : location.pathname === '/mi-aula' ? 'Mi aula' : resources[location.pathname.slice(1)]?.title || 'SIGA';
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Saltar al contenido</a>
-    <aside className="sidebar"><div className="sidebar-brand"><Brand inverse /></div><div className="sidebar-scroll"><Navigation role={user.role} onSelect={() => setOpen(false)} /></div><div className="sidebar-foot"><span className="sidebar-foot-dot" />Un espacio para aprender y gestionar</div></aside>
+    <aside className="sidebar"><div className="sidebar-brand"><Brand inverse /></div><div className="sidebar-scroll"><Navigation role={user.role} onSelect={() => setOpen(false)} /></div><div className="sidebar-foot"><span className="sidebar-foot-dot" />Sistema de Gestión Académica</div></aside>
     <div className="shell-main"><header className="topbar">
       <button type="button" aria-label={open ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={open} aria-controls="mobile-navigation" className="btn-secondary menu-toggle" onClick={() => setOpen(!open)}><Icon name={open ? 'close' : 'menu'} size={19} /><span>Menú</span></button>
       <div className="topbar-context"><span className="topbar-kicker">Sistema de Gestión Académica</span><span className="topbar-title">{section}</span></div>
-      <div className="topbar-user"><span className="user-avatar" aria-hidden="true">{initials}</span><span className="user-text"><strong>{user.firstName} {user.lastName}</strong><small>{roles[user.role]}</small></span><button type="button" className="logout-button" onClick={leave}><Icon name="logout" size={16} />Salir</button></div>
+      <div className="topbar-user"><span className="user-avatar" aria-hidden="true">{initials}</span><span className="user-text"><strong>{user.firstName} {user.lastName}</strong><small>{roles[user.role]}</small></span><button type="button" className="logout-button" onClick={leave}><Icon name="logout" size={16} />Cerrar sesión</button></div>
     </header>
     {open && <div id="mobile-navigation" className="mobile-nav"><div className="mobile-nav-brand"><Brand inverse /></div><Navigation role={user.role} onSelect={() => setOpen(false)} /></div>}
     <main id="main-content" className="content"><Outlet /></main></div>

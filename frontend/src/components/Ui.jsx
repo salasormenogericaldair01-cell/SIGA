@@ -18,7 +18,7 @@ export function Notice({ message, kind = 'error' }) {
 
 export function Spinner() { return <p role="status" className="loading-state"><span className="loading-dot" />Cargando…</p>; }
 
-export function EmptyState({ message = 'No hay registros para mostrar.' }) {
+export function EmptyState({ message = 'Aún no hay registros disponibles.' }) {
   return <div className="empty-state"><Icon name="info" size={23} /><p>{message}</p></div>;
 }
 

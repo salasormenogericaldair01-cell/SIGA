@@ -91,7 +91,7 @@ describe('sesión y navegación', () => {
     fireEvent.click((await screen.findAllByRole('link', { name: /Mis calificaciones/ }))[0]);
     expect(await screen.findByRole('alert')).toHaveTextContent('No tienes un perfil de estudiante');
     expect(sessionStorage.getItem('siga_token')).toBe('previo');
-    fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
     expect(await screen.findByRole('button', { name: 'Ingresar' })).toBeInTheDocument();
     expect(sessionStorage.getItem('siga_token')).toBeNull();
   });
@@ -104,7 +104,7 @@ describe('sesión y navegación', () => {
     expect(screen.queryByRole('link', { name: 'Usuarios' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: 'Docentes' }));
     expect(await screen.findByRole('heading', { name: 'Docentes' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Crear registro' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear perfil docente' })).not.toBeInTheDocument();
     expect(global.fetch.mock.calls.every(([url]) => !new URL(url).pathname.endsWith('/users'))).toBe(true);
   });
 
@@ -117,7 +117,7 @@ describe('sesión y navegación', () => {
     expect(screen.queryByRole('link', { name: 'Cursos' })).not.toBeInTheDocument();
     fireEvent.click((await screen.findAllByRole('link', { name: /Mis calificaciones/ }))[0]);
     expect(await screen.findByRole('heading', { name: 'Mis calificaciones' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Crear registro' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Registrar calificación' })).not.toBeInTheDocument();
     expect(global.fetch.mock.calls.every(([url]) => !new URL(url).pathname.endsWith('/users'))).toBe(true);
   });
 
@@ -127,7 +127,7 @@ describe('sesión y navegación', () => {
     render(<App />);
     fireEvent.click(await screen.findByRole('link', { name: 'Estudiantes' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Registrar estudiante' }));
-    expect(screen.queryByLabelText('Cuenta ESTUDIANTE (opcional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Cuenta de estudiante (opcional)')).not.toBeInTheDocument();
     expect(global.fetch.mock.calls.every(([url]) => !new URL(url).pathname.endsWith('/users'))).toBe(true);
   });
 
@@ -144,7 +144,7 @@ describe('sesión y navegación', () => {
     expect(screen.getByText('Lucía Pérez')).toBeInTheDocument();
     expect(screen.getByText('Página 1 de 2 · 21 registros')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Registrar estudiante' }));
-    expect(screen.getByText('El perfil puede registrarse sin una cuenta de acceso.')).toBeInTheDocument();
+    expect(screen.getByText('Puedes registrar al estudiante sin vincular una cuenta de acceso.')).toBeInTheDocument();
     expect(screen.getByLabelText('Nombres')).toBeInTheDocument();
     expect(screen.getByLabelText('Fecha de nacimiento')).toBeInTheDocument();
     expect(document.getElementById('field-isActive')).toHaveValue('true');
@@ -185,7 +185,7 @@ describe('sesión y navegación', () => {
     });
     render(<App />);
     fireEvent.click(await screen.findByRole('link', { name: 'Cursos' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Crear registro' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear curso' }));
     fireEvent.change(screen.getByLabelText('Código'), { target: { value: 'MAT' } });
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Matemática' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
