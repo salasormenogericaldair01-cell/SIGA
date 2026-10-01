@@ -20,7 +20,7 @@ let enrollmentA;
 let enrollmentB;
 
 function token(user) {
-  return `Bearer ${jwt.sign({}, process.env.JWT_SECRET, { algorithm: 'HS256', subject: user.id, expiresIn: '1h' })}`;
+  return `Bearer ${jwt.sign({ tokenVersion: user.tokenVersion }, process.env.JWT_SECRET, { algorithm: 'HS256', subject: user.id, expiresIn: '1h' })}`;
 }
 function call(method, path, user, body) {
   const req = request(app)[method](path).set('Authorization', token(user));

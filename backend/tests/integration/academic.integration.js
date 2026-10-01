@@ -9,7 +9,7 @@ const ids = { users: [], levels: [], grades: [], periods: [], sections: [] };
 let verified = false;
 
 function auth(user) {
-  const token = jwt.sign({}, process.env.JWT_SECRET, { algorithm: 'HS256', subject: user.id, expiresIn: '1h' });
+  const token = jwt.sign({ tokenVersion: user.tokenVersion }, process.env.JWT_SECRET, { algorithm: 'HS256', subject: user.id, expiresIn: '1h' });
   return `Bearer ${token}`;
 }
 

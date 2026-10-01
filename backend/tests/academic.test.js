@@ -15,8 +15,8 @@ const { seedAcademic } = require('../scripts/seed-academic');
 
 const app = createApp();
 const id = () => randomUUID();
-const users = Object.fromEntries(['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'].map((role) => [role, { id: id(), email: `${role.toLowerCase()}@test.edu`, firstName: 'A', lastName: 'B', role, isActive: true }]));
-const token = (role) => `Bearer ${jwt.sign({}, process.env.JWT_SECRET, { algorithm: 'HS256', subject: users[role].id, expiresIn: '1h' })}`;
+const users = Object.fromEntries(['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'].map((role) => [role, { id: id(), email: `${role.toLowerCase()}@test.edu`, firstName: 'A', lastName: 'B', role, isActive: true, tokenVersion: 0 }]));
+const token = (role) => `Bearer ${jwt.sign({ tokenVersion: 0 }, process.env.JWT_SECRET, { algorithm: 'HS256', subject: users[role].id, expiresIn: '1h' })}`;
 const send = (method, route, role, body) => {
   const req = request(app)[method](route).set('Authorization', token(role));
   return body === undefined ? req : req.send(body);

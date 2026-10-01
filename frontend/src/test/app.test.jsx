@@ -96,6 +96,44 @@ describe('sesión y navegación', () => {
     expect(sessionStorage.getItem('siga_token')).toBeNull();
   });
 
+  it.each([admin, secretary, teacher, student])('ofrece cambio de contraseña al rol %s', async (user) => {
+    sessionStorage.setItem('siga_token', 'previo');
+    mockApi((path) => path === '/api/auth/me' ? json(200, { user }) : json(500, {}));
+    render(<App />);
+    expect(await screen.findByRole('link', { name: 'Cambiar contraseña' })).toBeInTheDocument();
+  });
+
+  it('cambia la contraseña, limpia la sesión y vuelve al login con una explicación', async () => {
+    sessionStorage.setItem('siga_token', 'previo');
+    mockApi((path) => path === '/api/auth/me' ? json(200, { user: admin }) :
+      path === '/api/auth/change-password' ? json(200, { message: 'Contraseña actualizada' }) : json(500, {}));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Cambiar contraseña' }));
+    fireEvent.change(screen.getByLabelText('Contraseña actual'), { target: { value: 'AnteriorSegura123' } });
+    fireEvent.change(screen.getByLabelText('Nueva contraseña'), { target: { value: 'NuevaFraseSegura123' } });
+    fireEvent.change(screen.getByLabelText('Confirmar nueva contraseña'), { target: { value: 'NuevaFraseSegura123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Actualizar contraseña' }));
+    expect(await screen.findByText('Contraseña actualizada. Inicia sesión con la nueva contraseña.')).toBeInTheDocument();
+    expect(sessionStorage.getItem('siga_token')).toBeNull();
+    const request = global.fetch.mock.calls.find(([url]) => new URL(url).pathname === '/api/auth/change-password');
+    expect(JSON.parse(request[1].body)).toEqual({ currentPassword: 'AnteriorSegura123', newPassword: 'NuevaFraseSegura123' });
+  });
+
+  it('mantiene la sesión y el formulario ante una contraseña actual incorrecta', async () => {
+    sessionStorage.setItem('siga_token', 'previo');
+    mockApi((path) => path === '/api/auth/me' ? json(200, { user: admin }) :
+      path === '/api/auth/change-password' ? json(400, { message: 'La contraseña actual es incorrecta' }) : json(500, {}));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Cambiar contraseña' }));
+    fireEvent.change(screen.getByLabelText('Contraseña actual'), { target: { value: 'IncorrectaSegura123' } });
+    fireEvent.change(screen.getByLabelText('Nueva contraseña'), { target: { value: 'NuevaFraseSegura123' } });
+    fireEvent.change(screen.getByLabelText('Confirmar nueva contraseña'), { target: { value: 'NuevaFraseSegura123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Actualizar contraseña' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('La contraseña actual es incorrecta');
+    expect(sessionStorage.getItem('siga_token')).toBe('previo');
+    expect(screen.getByLabelText('Nueva contraseña')).toHaveValue('NuevaFraseSegura123');
+  });
+
   it('restringe operaciones y navegación de secretaría y estudiante', async () => {
     sessionStorage.setItem('siga_token', 'previo');
     mockApi((path) => path === '/api/auth/me' ? json(200, { user: secretary }) : json(200, { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }));

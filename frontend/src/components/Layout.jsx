@@ -26,6 +26,7 @@ function Navigation({ role, onSelect }) {
       if (visible.length === 0) return null;
       return <div className="nav-group" key={group.title}><p className="nav-heading">{group.title}</p>{visible.map((key) => link(`/${key}`, role === 'ESTUDIANTE' ? key === 'grade-records' ? 'Mis calificaciones' : 'Mi asistencia' : labels[key] || resources[key].title, key))}</div>;
     })}
+    <div className="nav-group"><p className="nav-heading">Mi cuenta</p>{link('/change-password', 'Cambiar contraseña', 'lock')}</div>
   </nav>;
 }
 
@@ -41,7 +42,7 @@ export default function Layout() {
   }, []);
   function leave() { logout(); navigate('/login', { replace: true }); }
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase();
-  const section = location.pathname === '/' ? 'Inicio' : location.pathname === '/mi-aula' ? 'Mi aula' : resources[location.pathname.slice(1)]?.title || 'SIGA';
+  const section = location.pathname === '/' ? 'Inicio' : location.pathname === '/mi-aula' ? 'Mi aula' : location.pathname === '/change-password' ? 'Cambiar contraseña' : resources[location.pathname.slice(1)]?.title || 'SIGA';
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Saltar al contenido</a>
     <aside className="sidebar"><div className="sidebar-brand"><Brand inverse /></div><div className="sidebar-scroll"><Navigation role={user.role} onSelect={() => setOpen(false)} /></div><div className="sidebar-foot"><span className="sidebar-foot-dot" />Sistema de Gestión Académica</div></aside>

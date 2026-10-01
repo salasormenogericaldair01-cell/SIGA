@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => sessionStorage.getItem(storageKey));
   const tokenRef = useRef(token);
   const [user, setUser] = useState(null);
+  const [sessionNotice, setSessionNotice] = useState('');
   const [loading, setLoading] = useState(Boolean(token));
   function clearSession() {
     tokenRef.current = null;
@@ -30,6 +31,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
+    setSessionNotice('');
     const result = await api('/auth/login', { method: 'POST', body: { email, password } });
     tokenRef.current = result.token;
     sessionStorage.setItem(storageKey, result.token);
@@ -53,7 +55,13 @@ export function AuthProvider({ children }) {
     } finally { setLoading(false); }
   }
 
-  return <AuthContext.Provider value={{ token, user, loading, login, logout: clearSession, retrySession, api }}>{children}</AuthContext.Provider>;
+  async function changePassword(currentPassword, newPassword) {
+    await api('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+    clearSession();
+    setSessionNotice('Contraseña actualizada. Inicia sesión con la nueva contraseña.');
+  }
+
+  return <AuthContext.Provider value={{ token, user, loading, sessionNotice, login, changePassword, logout: clearSession, retrySession, api }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
