@@ -115,6 +115,10 @@ body { margin: 0; min-width: 320px; }
 .data-table { width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; }
 .data-table th { padding: 11px 13px; border-bottom: 1px solid #E2E8F0; background: #F8FAFC; color: #475569; font-size: 10px; font-weight: 800; letter-spacing: .045em; text-align: left; text-transform: uppercase; }
 .data-table td { padding: 12px 13px; border-bottom: 1px solid #E2E8F0; color: #334155; line-height: 1.4; vertical-align: middle; overflow-wrap: anywhere; }
+.student-identity { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.student-identity-name { display: block; color: var(--ink, #172554); font-weight: 750; }
+.student-identity-code { display: block; margin-top: 2px; color: #64748B; font-size: .9em; font-weight: 500; }
+.enrollment-editor-student { margin: -5px 0 16px; padding: 10px 12px; border-radius: 8px; background: #F8FAFC; }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr:hover { background: #FCFDFE; }
 .row-actions { white-space: nowrap; }

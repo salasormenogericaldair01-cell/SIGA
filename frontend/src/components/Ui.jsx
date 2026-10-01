@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { listData, refLabel, resources } from '../services/resources';
+import { person } from '../utils/format';
 import Icon from './Icon';
 
 export function Button({ children, variant = 'primary', icon, className = '', type = 'button', ...props }) {
@@ -26,6 +27,10 @@ export function StatusBadge({ value }) {
   const active = value === true || value === 'ACTIVE';
   const label = typeof value === 'boolean' ? value ? 'Activo' : 'Inactivo' : value === 'ACTIVE' ? 'Activa' : value === 'CANCELLED' ? 'Cancelada' : String(value);
   return <span className={`status-badge ${active ? 'status-active' : 'status-inactive'}`}>{label}</span>;
+}
+
+export function StudentIdentity({ student }) {
+  return <span className="student-identity"><span className="student-identity-name">{person(student)}</span><span className="student-identity-code">Código: {student?.studentCode || '—'}</span></span>;
 }
 
 export function DataTable({ columns, rows, renderCell, renderActions }) {

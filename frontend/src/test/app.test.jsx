@@ -194,6 +194,38 @@ describe('sesión y navegación', () => {
     expect(screen.getByLabelText('Nombre')).toHaveValue('Matemática');
   });
 
+  it('identifica matrículas por nombre de Student sin cuenta en lista, detalle y selectores', async () => {
+    sessionStorage.setItem('siga_token', 'previo');
+    const ficha = { id: 'student-1', studentCode: 'EST-2026-001', firstName: 'María Elena del Carmen', lastName: 'Rojas Quispe de la Cruz', userId: null };
+    const matricula = { id: 'enrollment-1', studentId: ficha.id, student: ficha, sectionId: 'section-1', section: { id: 'section-1', name: 'A' }, academicPeriodId: 'period-1', academicPeriod: { id: 'period-1', name: '2026' }, status: 'ACTIVE' };
+    mockApi((path) => {
+      if (path === '/api/auth/me') return json(200, { user: admin });
+      if (path === '/api/enrollments/enrollment-1') return json(200, { data: matricula });
+      if (path === '/api/enrollments') return json(200, { data: [matricula], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+      if (path === '/api/students') return json(200, { data: [ficha], pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+      if (path === '/api/sections') return json(200, { items: [{ id: 'section-1', gradeId: 'grade-1', academicPeriodId: 'period-1', name: 'A' }] });
+      if (path === '/api/grades') return json(200, { items: [{ id: 'grade-1', educationLevelId: 'level-1', name: '1.º' }] });
+      if (path === '/api/academic-periods') return json(200, { items: [{ id: 'period-1', name: '2026' }] });
+      if (path === '/api/education-levels') return json(200, { items: [{ id: 'level-1', name: 'Primaria' }] });
+      return json(500, { message: 'Ruta inesperada' });
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Matrículas' }));
+    const cell = await screen.findByRole('cell', { name: /María Elena del Carmen Rojas Quispe de la Cruz.*Código: EST-2026-001/ });
+    expect(cell.querySelector('.student-identity-name')).toHaveTextContent('María Elena del Carmen Rojas Quispe de la Cruz');
+    expect(cell.querySelector('.student-identity-code')).toHaveTextContent('EST-2026-001');
+    fireEvent.click(screen.getByRole('button', { name: 'Ver' }));
+    expect(await screen.findByRole('heading', { name: 'Detalle' })).toBeInTheDocument();
+    expect(screen.getAllByText('María Elena del Carmen Rojas Quispe de la Cruz').length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar detalle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar matrícula' }));
+    expect(await screen.findByRole('option', { name: 'María Elena del Carmen Rojas Quispe de la Cruz · EST-2026-001' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar formulario' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.getByRole('region', { name: 'Editar matrícula' })).toHaveTextContent('María Elena del Carmen Rojas Quispe de la Cruz');
+    expect(screen.getByRole('region', { name: 'Editar matrícula' })).toHaveTextContent('EST-2026-001');
+  });
+
   it('permite avanzar y volver en un selector con listado paginado', async () => {
     sessionStorage.setItem('siga_token', 'previo');
     global.fetch = vi.fn((url) => {

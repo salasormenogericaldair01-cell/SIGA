@@ -166,10 +166,14 @@ Abre `http://localhost:5173`. El puerto es fijo y coincide con `CORS_ORIGIN=http
 
 El ADMIN gestiona usuarios, estructura, estudiantes, perfiles docentes, matrículas, cursos, asignaciones, notas y asistencia. SECRETARIA gestiona estructura, estudiantes, matrículas, cursos y asignaciones; consulta docentes, notas y asistencia. DOCENTE usa **Mi aula** para consultar sus asignaciones y matrículas, y registrar o corregir notas y asistencia individuales. ESTUDIANTE consulta sus propias notas y asistencia. Los listados paginados muestran el total y permiten avanzar de página; la estructura académica y usuarios no tienen paginación de servidor.
 
+En Matrículas, el nombre de la ficha `Student` identifica al estudiante y su código aparece como dato secundario en listados, detalle y selectores. Esto funciona también si el estudiante no tiene cuenta de acceso.
+
 La sesión guarda el JWT en memoria y `sessionStorage`, nunca en `localStorage`; se valida con `/auth/me` al abrir la aplicación. Un 401 limpia la sesión, mientras un 403 conserva la sesión y muestra el error. Cerrar sesión borra el token localmente, pero **no revoca** un JWT ya emitido. La autorización efectiva sigue en el backend. No existe registro público. Secretaría puede registrar un estudiante sin cuenta; solo ADMIN puede vincularlo a una cuenta ESTUDIANTE porque `/api/users` es exclusivo de ADMIN. Los selectores de perfiles docentes muestran cuentas DOCENTE activas aún no vinculadas.
 
 Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `frontend/`. Las pruebas usan HTTP simulado y no escriben en `siga` ni `siga_test`. El frontend no crea datos de demostración.
 
 La verificación final y el guion manual del MVP están en [docs/demo.md](docs/demo.md). El seed DEMO se ejecuta manualmente y nunca de forma automática en `siga`.
+
+El fundamento de seguridad, protección de datos y las brechas frente a la normativa peruana se documentan en [docs/seguridad-y-normativa.md](docs/seguridad-y-normativa.md).
 
 La identidad gráfica de SIGA en `frontend/src/components/Brand.jsx` y `frontend/public/brand-mark.svg` es propia de este proyecto; no es el escudo de una institución educativa. La imagen de campus en `frontend/public/images/campus-referencial.png` fue generada para la interfaz y se usa como ilustración decorativa. No representa una institución real.

@@ -97,3 +97,24 @@ test('listado de docentes consulta solo campos seguros de User', async () => {
   expect(select).not.toHaveProperty('passwordHash');
   expect(select).not.toHaveProperty('password');
 });
+
+test('matrículas: listado y detalle identifican desde Student sin cuenta y conservan permisos', async () => {
+  const id = randomUUID();
+  const record = {
+    id, studentId: randomUUID(), sectionId: randomUUID(), academicPeriodId: randomUUID(), status: 'ACTIVE',
+    student: { id: randomUUID(), studentCode: 'EST-2026-001', firstName: 'María Elena', lastName: 'Rojas Quispe' },
+    section: { id: randomUUID(), name: 'A' }, academicPeriod: { id: randomUUID(), name: '2026' },
+  };
+  prisma.enrollment.count.mockResolvedValue(1);
+  prisma.enrollment.findMany.mockResolvedValue([record]);
+  prisma.enrollment.findUnique.mockResolvedValue(record);
+
+  const listed = await call('get', '/api/enrollments?page=1&limit=20', 'SECRETARIA').expect(200);
+  const detail = await call('get', `/api/enrollments/${id}`, 'ADMIN').expect(200);
+  expect(listed.body.data[0].student).toMatchObject({ firstName: 'María Elena', lastName: 'Rojas Quispe', studentCode: 'EST-2026-001' });
+  expect(detail.body.data.student).toEqual(listed.body.data[0].student);
+  expect(prisma.enrollment.findMany.mock.calls[0][0].include.student.select).toEqual({ id: true, studentCode: true, firstName: true, lastName: true });
+  expect(JSON.stringify([listed.body, detail.body])).not.toContain('passwordHash');
+  await call('get', `/api/enrollments/${id}`, 'DOCENTE').expect(403);
+  await call('get', `/api/enrollments/${id}`, 'ESTUDIANTE').expect(403);
+});

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Icon from '../components/Icon';
-import { Button, ConfirmDialog, DataTable, EmptyState, FilterPanel, FormField, Notice, PageHeader, Pager, ReferenceField, Spinner, StatusBadge } from '../components/Ui';
+import { Button, ConfirmDialog, DataTable, EmptyState, FilterPanel, FormField, Notice, PageHeader, Pager, ReferenceField, Spinner, StatusBadge, StudentIdentity } from '../components/Ui';
 import { displayValue, listData, resources } from '../services/resources';
 import { dateOnly } from '../utils/format';
 
@@ -91,6 +91,7 @@ function Editor({ resource, item, onClose, onSaved, user }) {
   const title = isEdit ? `Editar ${name}` : name === 'estudiante' || name === 'matrícula' || name === 'calificación' || name === 'asistencia' ? `Registrar ${name}` : `Crear ${name}`;
   return <section ref={editorRef} className="panel resource-editor" aria-label={title}>
     <div className="resource-editor-heading"><h2>{title}</h2><button type="button" className="icon-button" aria-label="Cerrar formulario" onClick={onClose}><Icon name="close" size={16} /></button></div>
+    {isEdit && resource.path === '/enrollments' && <p className="enrollment-editor-student"><StudentIdentity student={item.student} /></p>}
     <form onSubmit={save}><div className="editor-fields">
       {fields.map((field) => <FormField key={field.key} field={field} value={values[field.key]} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} error={errors[field.key]} disabled={busy} />)}
       {isStudent && !isEdit && <p className="form-help"><Icon name="info" size={16} />Puedes registrar al estudiante sin vincular una cuenta de acceso.</p>}
@@ -151,7 +152,9 @@ export default function ResourcePage({ resourceKey }) {
   const subtitle = user.role === 'ESTUDIANTE' ? resourceKey === 'grade-records' ? 'Consulta tus calificaciones por curso y bimestre.' : 'Consulta tu asistencia por curso y fecha.' : descriptions[resourceKey];
   const emptyMessage = Object.keys(filter).length ? 'No se encontraron resultados. Ajusta o limpia los filtros.' : user.role === 'ESTUDIANTE' ? resourceKey === 'grade-records' ? 'Aún no tienes calificaciones registradas.' : 'Aún no tienes asistencia registrada.' : 'Aún no hay registros disponibles.';
   const activeFilter = ['education-levels', 'grades', 'academic-periods', 'sections', 'students', 'teachers', 'courses', 'teaching-assignments'].includes(resourceKey);
-  const renderCell = (row, key) => key === 'isActive' || (resourceKey === 'enrollments' && key === 'status') ? <StatusBadge value={row[key]} /> : displayValue(row, key, referenceRows);
+  const renderCell = (row, key) => resourceKey === 'enrollments' && key === 'student'
+    ? <StudentIdentity student={row.student} />
+    : key === 'isActive' || (resourceKey === 'enrollments' && key === 'status') ? <StatusBadge value={row[key]} /> : displayValue(row, key, referenceRows);
 
   return <div>
     <PageHeader eyebrow={user.role === 'ESTUDIANTE' ? 'Mi información' : 'Gestión académica'} title={readableTitle} subtitle={subtitle} action={canCreateHere && <Button icon="plus" onClick={() => { setEditor(null); setSuccess(''); }}>{createLabel}</Button>} />

@@ -25,7 +25,7 @@ export const resources = {
     columns: [['user.firstName', 'Nombre'], ['user.lastName', 'Apellido'], ['user.email', 'Correo'], ['isActive', 'Estado']],
     create: [ref('userId', 'Cuenta docente', 'teacher-users')], edit: [field('isActive', 'Activo', 'checkbox')] },
   enrollments: { title: 'Matrículas', path: '/enrollments', roles: ['ADMIN', 'SECRETARIA'], write: ['ADMIN', 'SECRETARIA'], kind: 'data', paginated: true,
-    columns: [['student.studentCode', 'Estudiante'], ['section', 'Sección'], ['academicPeriod.name', 'Periodo'], ['status', 'Estado']],
+    columns: [['student', 'Estudiante'], ['section', 'Sección'], ['academicPeriod.name', 'Periodo'], ['status', 'Estado']],
     create: [ref('studentId', 'Estudiante', 'students'), ref('sectionId', 'Sección', 'sections')], edit: [ref('sectionId', 'Trasladar a sección', 'sections'), choice('status', 'Estado', [['ACTIVE', 'Activa'], ['CANCELLED', 'Cancelada']])],
     filters: [ref('studentId', 'Estudiante', 'students'), ref('sectionId', 'Sección', 'sections'), ref('academicPeriodId', 'Periodo', 'academic-periods'), choice('status', 'Estado', [['ACTIVE', 'Activa'], ['CANCELLED', 'Cancelada']])] },
   courses: { title: 'Cursos', path: '/courses', roles: ['ADMIN', 'SECRETARIA', 'DOCENTE'], write: ['ADMIN', 'SECRETARIA'], kind: 'data', paginated: true, search: true,
@@ -56,10 +56,10 @@ export function refLabel(resource, value) {
   if (resource === 'education-levels' || resource === 'academic-periods' || resource === 'courses') return value.name;
   if (resource === 'grades') return `${value.name}${value.educationLevel ? ` · ${value.educationLevel.name}` : ''}`;
   if (resource === 'sections') return sectionLabel(value);
-  if (resource === 'students') return `${value.studentCode} · ${person(value)}`;
+  if (resource === 'students') return `${person(value)} · ${value.studentCode}`;
   if (resource === 'teachers') return person(value.user);
   if (resource === 'teaching-assignments') return assignmentLabel(value);
-  if (resource === 'enrollments') return `${value.student?.studentCode || 'Matrícula'} · ${sectionLabel(value.section)}`;
+  if (resource === 'enrollments') return `${person(value.student)} · ${value.student?.studentCode || 'Sin código'} · ${sectionLabel(value.section)}`;
   return person(value);
 }
 
