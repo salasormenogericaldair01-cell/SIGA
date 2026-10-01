@@ -16,6 +16,7 @@ const paths = {
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   close: <path d="M5 5l14 14M19 5 5 19" />,
   logout: <><path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M14 8l4 4-4 4M8 12h10" /></>,
+  lock: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 15v2" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,

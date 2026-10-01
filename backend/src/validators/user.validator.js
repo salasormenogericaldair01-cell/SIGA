@@ -15,6 +15,11 @@ const loginSchema = z.strictObject({
   password: loginPasswordSchema,
 });
 
+const changePasswordSchema = z.strictObject({
+  currentPassword: loginPasswordSchema,
+  newPassword: passwordSchema,
+});
+
 const createUserSchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -30,6 +35,7 @@ module.exports = {
   emailSchema,
   passwordSchema,
   loginSchema,
+  changePasswordSchema,
   createUserSchema,
   statusSchema,
   idSchema,

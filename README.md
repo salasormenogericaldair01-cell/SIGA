@@ -59,6 +59,7 @@ Si el email normalizado ya existe, el script termina sin cambiar contraseña, ro
 | `GET /api/health` | Público | Estado del servicio |
 | `POST /api/auth/login` | Público, limitado a 5 intentos/15 min por IP | Usuario seguro y token |
 | `GET /api/auth/me` | Bearer JWT | Usuario actual |
+| `POST /api/auth/change-password` | Cualquier usuario autenticado, 5 intentos/15 min por IP | Cambia la contraseña y revoca sus JWT anteriores; no entrega otro token |
 | `POST /api/users` | ADMIN | Crear usuario (201) |
 | `GET /api/users` | ADMIN | Lista sin hashes |
 | `PATCH /api/users/:id/status` | ADMIN | Activar o desactivar otro usuario |
@@ -82,7 +83,7 @@ Si el email normalizado ya existe, el script termina sin cambiar contraseña, ro
 | `GET /api/attendance-records`, `/api/attendance-records/:id` | ADMIN, SECRETARIA; DOCENTE propias; ESTUDIANTE propias | Asistencia paginada y detalle |
 | `POST /api/attendance-records`, `PATCH /api/attendance-records/:id` | ADMIN; DOCENTE propias | Crear o corregir estado |
 
-El JWT dura por defecto una hora y solo contiene la identidad como `sub`. Cada petición protegida consulta la base para comprobar estado y rol vigentes. Desactivar una cuenta invalida sus tokens anteriores. No existe registro público.
+El JWT dura por defecto una hora e incluye `sub` y `tokenVersion`. Cada petición protegida consulta la base para comprobar estado, rol y versión vigentes. Desactivar una cuenta invalida sus tokens anteriores; cambiar la contraseña incrementa `tokenVersion` junto con el hash en una actualización atómica e invalida todos los tokens previos de esa cuenta. `POST /api/auth/change-password` exige `currentPassword` y `newPassword`, sin campos adicionales; la nueva contraseña sigue las reglas de creación (mínimo 12 caracteres, máximo 72 bytes UTF-8). Tras el cambio, hay que iniciar sesión de nuevo. **Los JWT emitidos antes de esta migración, sin versión, dejan de funcionar.** Esto no implementa revocación al cerrar sesión ni sesiones individuales. No existe registro público.
 
 Los recursos académicos son `education-levels`, `grades`, `academic-periods` y `sections`. Todos admiten el filtro opcional `isActive=true|false`; grados admiten `educationLevelId` y secciones `gradeId` y `academicPeriodId`. Sin filtros se devuelven activos e inactivos, ordenados por creación e ID. No hay DELETE ni paginación. DOCENTE y ESTUDIANTE reciben 403 y una petición sin token recibe 401.
 
@@ -166,7 +167,7 @@ Abre `http://localhost:5173`. El puerto es fijo y coincide con `CORS_ORIGIN=http
 
 El ADMIN gestiona usuarios, estructura, estudiantes, perfiles docentes, matrículas, cursos, asignaciones, notas y asistencia. SECRETARIA gestiona estructura, estudiantes, matrículas, cursos y asignaciones; consulta docentes, notas y asistencia. DOCENTE usa **Mi aula** para consultar sus asignaciones y matrículas, y registrar o corregir notas y asistencia individuales. ESTUDIANTE consulta sus propias notas y asistencia. Los listados paginados muestran el total y permiten avanzar de página; la estructura académica y usuarios no tienen paginación de servidor.
 
-La sesión guarda el JWT en memoria y `sessionStorage`, nunca en `localStorage`; se valida con `/auth/me` al abrir la aplicación. Un 401 limpia la sesión, mientras un 403 conserva la sesión y muestra el error. Cerrar sesión borra el token localmente, pero **no revoca** un JWT ya emitido. La autorización efectiva sigue en el backend. No existe registro público. Secretaría puede registrar un estudiante sin cuenta; solo ADMIN puede vincularlo a una cuenta ESTUDIANTE porque `/api/users` es exclusivo de ADMIN. Los selectores de perfiles docentes muestran cuentas DOCENTE activas aún no vinculadas.
+La sesión guarda el JWT en memoria y `sessionStorage`, nunca en `localStorage`; se valida con `/auth/me` al abrir la aplicación. Un 401 limpia la sesión, mientras un 403 conserva la sesión y muestra el error. Todos los roles pueden usar **Cambiar contraseña**; al terminar, el frontend borra su sesión y vuelve al login. Cerrar sesión borra el token localmente, pero **no revoca** un JWT ya emitido. La autorización efectiva sigue en el backend. No existe registro público. Secretaría puede registrar un estudiante sin cuenta; solo ADMIN puede vincularlo a una cuenta ESTUDIANTE porque `/api/users` es exclusivo de ADMIN. Los selectores de perfiles docentes muestran cuentas DOCENTE activas aún no vinculadas.
 
 Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `frontend/`. Las pruebas usan HTTP simulado y no escriben en `siga` ni `siga_test`. El frontend no crea datos de demostración.
 

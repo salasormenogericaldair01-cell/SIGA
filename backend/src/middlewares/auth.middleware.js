@@ -21,21 +21,25 @@ async function authenticate(req, res, next) {
   if (
     typeof payload !== 'object' ||
     !z.uuid().safeParse(payload.sub).success ||
+    !Number.isSafeInteger(payload.tokenVersion) || payload.tokenVersion < 0 ||
     typeof payload.exp !== 'number' ||
     payload.exp <= Math.floor(Date.now() / 1000)
   ) {
     return res.status(401).json({ message: 'No autorizado' });
   }
 
-  // La base es la fuente actual del rol y del estado; el JWT solo identifica.
+  // La base es la fuente actual del rol, estado y versión de sesión.
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { ...publicUserSelect, isActive: true },
+    select: { ...publicUserSelect, isActive: true, tokenVersion: true },
   });
-  if (!user || !user.isActive) return res.status(401).json({ message: 'No autorizado' });
+  if (!user || !user.isActive || user.tokenVersion !== payload.tokenVersion) {
+    return res.status(401).json({ message: 'No autorizado' });
+  }
 
-  const { isActive, ...safeUser } = user;
+  const { isActive, tokenVersion, ...safeUser } = user;
   req.user = safeUser;
+  req.tokenVersion = tokenVersion;
   return next();
 }
 

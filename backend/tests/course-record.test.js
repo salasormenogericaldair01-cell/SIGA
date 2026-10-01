@@ -19,7 +19,7 @@ const { respond } = require('../src/utils/module-error');
 
 const app = createApp();
 const users = Object.fromEntries(['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'].map((role) => [role, {
-  id: randomUUID(), role, email: `${role.toLowerCase()}@test.edu`, firstName: role, lastName: 'Test', isActive: true,
+  id: randomUUID(), role, email: `${role.toLowerCase()}@test.edu`, firstName: role, lastName: 'Test', isActive: true, tokenVersion: 0,
 }]));
 const teacherId = randomUUID();
 const otherTeacherId = randomUUID();
@@ -27,7 +27,7 @@ const studentId = randomUUID();
 const otherStudentId = randomUUID();
 const assignmentId = randomUUID();
 const enrollmentId = randomUUID();
-const auth = (role) => `Bearer ${jwt.sign({}, process.env.JWT_SECRET, { subject: users[role].id, algorithm: 'HS256', expiresIn: '1h' })}`;
+const auth = (role) => `Bearer ${jwt.sign({ tokenVersion: 0 }, process.env.JWT_SECRET, { subject: users[role].id, algorithm: 'HS256', expiresIn: '1h' })}`;
 const call = (method, path, role, body) => {
   const req = request(app)[method](path).set('Authorization', auth(role));
   return body === undefined ? req : req.send(body);

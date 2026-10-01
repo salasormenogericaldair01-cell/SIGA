@@ -4,6 +4,7 @@ jest.mock('../src/config/prisma', () => ({
     create: jest.fn(),
     findMany: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   },
 }));
 
@@ -29,7 +30,7 @@ function selected(user, select) {
 }
 
 function tokenFor(user, payload = {}) {
-  return jwt.sign(payload, secret, { algorithm: 'HS256', subject: user.id, expiresIn: '1h' });
+  return jwt.sign({ tokenVersion: user.tokenVersion, ...payload }, secret, { algorithm: 'HS256', subject: user.id, expiresIn: '1h' });
 }
 
 function auth(user, payload = {}) {
@@ -41,6 +42,7 @@ async function makeUser(role, email, isActive = true) {
     id: randomUUID(),
     email,
     passwordHash: await bcrypt.hash(validPassword, 10),
+    tokenVersion: 0,
     firstName: 'Nombre',
     lastName: 'Apellido',
     role,
@@ -67,7 +69,7 @@ beforeEach(async () => {
     if ([...users.values()].some((user) => user.email === data.email)) {
       throw Object.assign(new Error('unique constraint'), { code: 'P2002' });
     }
-    const user = { id: randomUUID(), ...data, isActive: true, createdAt: new Date(), updatedAt: new Date() };
+    const user = { id: randomUUID(), tokenVersion: 0, ...data, isActive: true, createdAt: new Date(), updatedAt: new Date() };
     users.set(user.id, user);
     return selected(user, select);
   });
@@ -76,6 +78,13 @@ beforeEach(async () => {
     if (!user) throw Object.assign(new Error('missing'), { code: 'P2025' });
     Object.assign(user, data);
     return selected(user, select);
+  });
+  prisma.user.updateMany.mockImplementation(async ({ where, data }) => {
+    const user = users.get(where.id);
+    if (!user || user.passwordHash !== where.passwordHash || user.tokenVersion !== where.tokenVersion || !user.isActive) return { count: 0 };
+    user.passwordHash = data.passwordHash;
+    user.tokenVersion += data.tokenVersion.increment;
+    return { count: 1 };
   });
   app = createApp();
 });
@@ -87,6 +96,7 @@ describe('Autenticación (Prisma simulado)', () => {
     expect(response.body.user).not.toHaveProperty('passwordHash');
     expect(response.body.user).not.toHaveProperty('password');
     expect(jwt.verify(response.body.token, secret, { algorithms: ['HS256'] }).sub).toBe(admin.id);
+    expect(jwt.verify(response.body.token, secret, { algorithms: ['HS256'] }).tokenVersion).toBe(0);
   });
 
   test.each([
@@ -110,10 +120,11 @@ describe('Autenticación (Prisma simulado)', () => {
   });
 
   test('JWT inválido, vencido, sin expiración o con algoritmo distinto devuelve 401', async () => {
-    const expired = jwt.sign({ sub: admin.id, exp: Math.floor(Date.now() / 1000) - 10 }, secret, { algorithm: 'HS256' });
-    const withoutExpiration = jwt.sign({ sub: admin.id }, secret, { algorithm: 'HS256' });
-    const wrongAlgorithm = jwt.sign({ sub: admin.id }, secret, { algorithm: 'HS384' });
-    for (const token of ['incorrecto', expired, withoutExpiration, wrongAlgorithm]) {
+    const expired = jwt.sign({ sub: admin.id, tokenVersion: 0, exp: Math.floor(Date.now() / 1000) - 10 }, secret, { algorithm: 'HS256' });
+    const withoutExpiration = jwt.sign({ sub: admin.id, tokenVersion: 0 }, secret, { algorithm: 'HS256' });
+    const wrongAlgorithm = jwt.sign({ sub: admin.id, tokenVersion: 0 }, secret, { algorithm: 'HS384' });
+    const withoutVersion = jwt.sign({ sub: admin.id, exp: Math.floor(Date.now() / 1000) + 3600 }, secret, { algorithm: 'HS256' });
+    for (const token of ['incorrecto', expired, withoutExpiration, wrongAlgorithm, withoutVersion]) {
       await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`).expect(401);
     }
   });
@@ -127,6 +138,59 @@ describe('Autenticación (Prisma simulado)', () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  test('cambiar contraseña exige sesión y un cuerpo estricto con nueva contraseña válida', async () => {
+    await request(app).post('/api/auth/change-password').send({ currentPassword: validPassword, newPassword: 'OtraFraseSegura123' }).expect(401);
+    await request(app).post('/api/auth/change-password').set(auth(admin)).send({ currentPassword: validPassword, newPassword: 'corta' }).expect(400);
+    await request(app).post('/api/auth/change-password').set(auth(admin)).send({ currentPassword: validPassword, newPassword: '🔒'.repeat(19) }).expect(400);
+    await request(app).post('/api/auth/change-password').set(auth(admin)).send({ currentPassword: validPassword, newPassword: 'OtraFraseSegura123', userId: docente.id }).expect(400);
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('contraseña actual incorrecta no cambia el hash ni la versión', async () => {
+    const originalHash = admin.passwordHash;
+    await request(app).post('/api/auth/change-password').set(auth(admin))
+      .send({ currentPassword: 'Incorrecta12345', newPassword: 'OtraFraseSegura123' }).expect(400);
+    expect(admin.passwordHash).toBe(originalHash);
+    expect(admin.tokenVersion).toBe(0);
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('cambio correcto revoca el token anterior y exige login con la nueva contraseña', async () => {
+    const oldToken = tokenFor(admin);
+    const response = await request(app).post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${oldToken}`)
+      .send({ currentPassword: validPassword, newPassword: 'OtraFraseSegura123' }).expect(200);
+    expect(response.body).not.toHaveProperty('token');
+    expect(JSON.stringify(response.body)).not.toContain('passwordHash');
+    expect(admin.tokenVersion).toBe(1);
+    expect(await bcrypt.compare('OtraFraseSegura123', admin.passwordHash)).toBe(true);
+    await request(app).get('/api/auth/me').set('Authorization', `Bearer ${oldToken}`).expect(401);
+    await request(app).post('/api/auth/login').send({ email: admin.email, password: validPassword }).expect(401);
+    const login = await request(app).post('/api/auth/login').send({ email: admin.email, password: 'OtraFraseSegura123' }).expect(200);
+    expect(jwt.verify(login.body.token, secret, { algorithms: ['HS256'] }).tokenVersion).toBe(1);
+  });
+
+  test('dos cambios concurrentes no reutilizan la misma contraseña actual', async () => {
+    const oldToken = tokenFor(admin);
+    const responses = await Promise.all([
+      request(app).post('/api/auth/change-password').set('Authorization', `Bearer ${oldToken}`).send({ currentPassword: validPassword, newPassword: 'NuevaFraseSeguraA123' }),
+      request(app).post('/api/auth/change-password').set('Authorization', `Bearer ${oldToken}`).send({ currentPassword: validPassword, newPassword: 'NuevaFraseSeguraB123' }),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+    expect(admin.tokenVersion).toBe(1);
+    expect(prisma.user.updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  test('limita los intentos de cambio de contraseña', async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await request(app).post('/api/auth/change-password').set(auth(admin))
+        .send({ currentPassword: 'Incorrecta12345', newPassword: 'OtraFraseSegura123' }).expect(400);
+    }
+    await request(app).post('/api/auth/change-password').set(auth(admin))
+      .send({ currentPassword: 'Incorrecta12345', newPassword: 'OtraFraseSegura123' }).expect(429);
+    expect(admin.tokenVersion).toBe(0);
   });
 });
 

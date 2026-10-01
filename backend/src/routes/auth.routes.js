@@ -1,6 +1,6 @@
 const express = require('express');
 const { rateLimit } = require('express-rate-limit');
-const { login, me } = require('../controllers/auth.controller');
+const { login, me, changePassword } = require('../controllers/auth.controller');
 const { authenticate } = require('../middlewares/auth.middleware');
 
 function createAuthRouter() {
@@ -12,9 +12,17 @@ function createAuthRouter() {
     legacyHeaders: false,
     message: { message: 'Demasiados intentos. Inténtalo más tarde' },
   });
+  const changePasswordLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { message: 'Demasiados intentos. Inténtalo más tarde' },
+  });
 
   router.post('/login', loginLimiter, login);
   router.get('/me', authenticate, me);
+  router.post('/change-password', authenticate, changePasswordLimiter, changePassword);
   return router;
 }
 
