@@ -1,6 +1,6 @@
 # Demostración de SIGA (MVP académico)
 
-SIGA es un **proyecto académico**, no un sistema listo para producción. La demostración usa datos ficticios con prefijo `DEMO`; no introduce datos reales.
+SIGA es un **proyecto académico**, no un sistema listo para producción. Este guion de pruebas locales usa datos ficticios con prefijo `DEMO`; la base publicada ya pasó por una transición a datos ilustrativos sin ese prefijo.
 
 ## Arranque
 
@@ -39,7 +39,7 @@ La prueba E2E usa `playwright-core` con Microsoft Edge instalado; no descarga ot
 
 El seed es manual e idempotente: crea cuentas, perfiles, periodo del año actual, dos secciones, cursos, asignaciones, matrículas, una nota y una asistencia por estudiante. Reutiliza niveles y grados activos si ya existen, sin editarlos. Nunca modifica el ADMIN existente, contraseñas o registros encontrados; ante una colisión incompatible se detiene. Requiere `DEMO_ADMIN_PASSWORD`, `DEMO_SECRETARIA_PASSWORD`, `DEMO_DOCENTE_A_PASSWORD`, `DEMO_DOCENTE_B_PASSWORD`, `DEMO_ESTUDIANTE_A_PASSWORD` y `DEMO_ESTUDIANTE_B_PASSWORD`, cada una con al menos 12 caracteres y máximo 72 bytes UTF-8. Guárdalas solo en configuración local ignorada; no las pegues en documentación ni comandos compartidos. El script E2E limpia por ID los registros que crea y revierte el cambio temporal de docente.
 
-Para limpiar únicamente los registros que **este seed creó** en `siga_test`, ejecuta `node --env-file=.env.mvp scripts/cleanup-demo-test.js`. El comando usa un manifiesto local de IDs y rechaza `siga`. No hay `TRUNCATE` ni limpieza general. **No se ha ejecutado el seed en `siga`.** Para preparar después la demo en desarrollo, crea `backend/.env.demo` local con la URL de `siga`, `DEMO_TARGET=siga` y las mismas variables DEMO; verifica primero con `node --env-file=.env.demo scripts/verify-demo-target.js` y ejecuta manualmente `node --env-file=.env.demo scripts/seed-demo.js`.
+Para limpiar únicamente los registros que **este seed creó** en `siga_test`, ejecuta `node --env-file=.env.mvp scripts/cleanup-demo-test.js`. El comando usa un manifiesto local de IDs y rechaza `siga`. No hay `TRUNCATE` ni limpieza general. El seed se ejecutó manualmente en `siga` y no forma parte del arranque. La base publicada de Render ya tiene seis cuentas y datos académicos nuevos; sus antiguos registros DEMO fueron retirados mediante el procedimiento documentado en [transicion-datos-beta.md](transicion-datos-beta.md). No repitas el seed DEMO en esa base.
 
 ## Guion de 5–7 minutos
 

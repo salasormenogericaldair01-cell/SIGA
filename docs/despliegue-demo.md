@@ -4,7 +4,7 @@ Esta guía prepara una **demo académica con datos ficticios**. No crea servicio
 
 ## 1. PostgreSQL en Render
 
-La base ya creada tiene **Database Name: `siga_demo_egx3`** y puerto **5432**. Anota, en tu gestor local de secretos, las URL **Internal** y **External** y sus respectivos hosts; no las copies al repositorio. La API en Render usa la URL interna. Para verificar y sembrar desde tu equipo usarás temporalmente la externa con `sslmode=require` y acceso de red limitado a tu IP; después podrás restringir o desactivar ese acceso externo. [Conexiones de Render Postgres](https://render.com/docs/postgresql-creating-connecting).
+La base ya creada tiene **Database Name: `siga_demo_egx3`** y puerto **5432**. Conserva las URL **Internal** y **External** y sus respectivos hosts en un gestor local de secretos; no las copies al repositorio. La API en Render usa la URL interna. La transición de datos ya se completó; la URL externa se utilizó para las operaciones manuales autorizadas con TLS. Restringe o desactiva ese acceso externo si ya no se necesita. [Conexiones de Render Postgres](https://render.com/docs/postgresql-creating-connecting).
 
 ## 2. API en Render
 
@@ -53,36 +53,12 @@ Importa el mismo repositorio como proyecto **Vite** y completa:
 
 `frontend/vercel.json` reescribe las rutas de React Router hacia `index.html`, por lo que una recarga de `/login` o `/students` no debe devolver 404. `VITE_API_URL` es pública y se incorpora al JavaScript durante el build; **no pongas contraseñas, tokens ni secretos en variables `VITE_*`**. Al conocer el dominio final de Vercel, actualiza `CORS_ORIGIN` en Render con ese origen exacto y vuelve a desplegar la API. Los dominios de preview de Vercel no quedan permitidos automáticamente. [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Root Directory](https://vercel.com/docs/builds/configure-a-build).
 
-## 4. Seed manual con contraseñas locales
+## 4. Estado de los datos publicados
 
-Desde `backend/` del worktree de preparación, guarda la **External Database URL** en `.env.demo.cloud`, archivo local ignorado por Git. Deja estas tres variables, completando las dos vacías desde la URL externa de Render **en tu editor, nunca por chat**:
+El seed DEMO se ejecutó manualmente durante la preparación inicial. Después se generó un respaldo externo verificable, se crearon y comprobaron por API seis cuentas nuevas, y se retiraron los registros DEMO. La base publicada tiene ahora seis usuarios activos, tres niveles, catorce grados, un periodo y dos registros de cada entidad académica restante. Consulta el orden y las barreras de seguridad en [transicion-datos-beta.md](transicion-datos-beta.md).
 
-```dotenv
-DEMO_TARGET=siga_demo_egx3
-DEMO_DATABASE_HOST=
-DATABASE_URL=
-```
-
-`DEMO_DATABASE_HOST` es solo el host de la URL externa, sin usuario, contraseña, protocolo ni puerto. La URL debe nombrar `siga_demo_egx3`, usar el puerto 5432 y requerir TLS con `sslmode=require`. Mantén las seis variables `DEMO_*_PASSWORD` actuales en el `.env.demo` ignorado del checkout principal; no copies sus valores a Vercel, Render, el código ni este worktree. Node 24 permite cargar ese archivo por ruta y luego `.env.demo.cloud`, que sustituye el destino local.
-
-**Primero, solo lectura:**
-
-```powershell
-cd backend
-node --env-file=.env.demo.cloud scripts/verify-demo-target.js
-node --env-file=.env.demo.cloud ./node_modules/prisma/build/index.js migrate status
-```
-
-El verificador consulta `current_database()` y `inet_server_port()`; debe confirmar `siga_demo_egx3` y 5432 antes de cualquier escritura. Como el build de Render puede haber aplicado las migraciones, **consulta el estado antes de desplegarlas otra vez**. Estos comandos quedan preparados para una ejecución manual posterior, cuando hayas revisado el resultado anterior:
-
-```powershell
-node --env-file=.env.demo.cloud scripts/verify-demo-target.js
-node --env-file=.env.demo.cloud ./node_modules/prisma/build/index.js migrate deploy
-node --env-file=../../../backend/.env.demo --env-file=.env.demo.cloud scripts/seed-demo.js
-```
-
-La última ruta reutiliza las contraseñas ignoradas del checkout principal cuando trabajas desde un worktree bajo `.worktrees/`; si ejecutas desde un checkout que ya contiene `backend/.env.demo`, usa `--env-file=.env.demo` en su lugar. Ejecuta el seed **solo después** de aplicar las migraciones. Valida sus reglas, crea registros DEMO de forma idempotente y se detiene ante colisiones incompatibles; no cambia contraseñas ni usuarios existentes. No ejecutes `cleanup:demo-test` en la nube: esa limpieza está limitada a `siga_test`. El manifiesto local del seed queda ignorado por Git. Si una cuenta DEMO ya existe con otra contraseña o rol, investiga la colisión; no fuerces una sobrescritura.
+**No vuelvas a ejecutar el seed DEMO ni las etapas `prepare` o `retire` sobre este estado.** El nombre técnico `siga_demo_egx3` permanece en Render, pero no aparece como etiqueta de los datos visibles. `cleanup:demo-test` sigue limitado exclusivamente a `siga_test`. Los archivos locales de conexión, respaldo y comprobantes permanecen fuera de Git.
 
 ## Comprobación antes de compartir la URL
 
-Comprueba `GET /api/health`, login y `GET /api/auth/me` en la API; desde Vercel, recarga una ruta interna y prueba los módulos de cada rol. Verifica que el navegador no tenga errores de CORS ni contenido mixto, que el limitador de login funciona detrás del proxy y que el seed se ejecutó solo en `siga_demo_egx3`. Usa exclusivamente datos ficticios. Esta demo académica no sustituye una revisión de seguridad, privacidad, respaldos y recuperación para datos reales; las brechas están en [seguridad-y-normativa.md](seguridad-y-normativa.md).
+Comprueba `GET /api/health`, login y `GET /api/auth/me` en la API; desde Vercel, recarga una ruta interna y prueba los módulos de cada rol. Verifica que el navegador no tenga errores de CORS ni contenido mixto y que el limitador de login funciona detrás del proxy. Usa exclusivamente datos ficticios. Esta demo académica no sustituye una revisión de seguridad, privacidad, respaldos y recuperación para datos reales; las brechas están en [seguridad-y-normativa.md](seguridad-y-normativa.md).
