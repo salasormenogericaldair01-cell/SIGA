@@ -1,4 +1,4 @@
-const { loginSchema, changePasswordSchema } = require('../validators/user.validator');
+const { loginSchema, changePasswordSchema, updateProfileSchema } = require('../validators/user.validator');
 const authService = require('../services/auth.service');
 
 async function login(req, res) {
@@ -15,6 +15,18 @@ function me(req, res) {
   return res.json({ user: req.user });
 }
 
+async function updateProfile(req, res) {
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Datos inválidos' });
+  try {
+    const user = await authService.updateProfile(req.user.id, req.tokenVersion, parsed.data);
+    return res.json({ user });
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(401).json({ message: 'No autorizado' });
+    throw error;
+  }
+}
+
 async function changePassword(req, res) {
   const parsed = changePasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Datos inválidos' });
@@ -27,4 +39,4 @@ async function changePassword(req, res) {
   return res.json({ message: 'Contraseña actualizada. Inicia sesión nuevamente.' });
 }
 
-module.exports = { login, me, changePassword };
+module.exports = { login, me, updateProfile, changePassword };

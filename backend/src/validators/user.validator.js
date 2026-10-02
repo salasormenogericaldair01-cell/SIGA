@@ -20,6 +20,12 @@ const changePasswordSchema = z.strictObject({
   newPassword: passwordSchema,
 });
 
+const profileNameSchema = z.string().trim().min(1).max(100);
+const updateProfileSchema = z.strictObject({
+  firstName: profileNameSchema,
+  lastName: profileNameSchema,
+}).partial().refine((value) => Object.keys(value).length > 0);
+
 const createUserSchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -36,6 +42,7 @@ module.exports = {
   passwordSchema,
   loginSchema,
   changePasswordSchema,
+  updateProfileSchema,
   createUserSchema,
   statusSchema,
   idSchema,

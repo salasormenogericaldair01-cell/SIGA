@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
 const env = require('../config/env');
-const { publicUser } = require('../utils/user');
+const { publicUser, publicUserSelect } = require('../utils/user');
 const { passwordSchema } = require('../validators/user.validator');
 
 async function login({ email, password }) {
@@ -40,4 +40,12 @@ async function changePassword(userId, tokenVersion, currentPassword, newPassword
   return result.count === 1 ? 'changed' : 'stale-session';
 }
 
-module.exports = { login, changePassword };
+async function updateProfile(userId, tokenVersion, fields) {
+  return prisma.user.update({
+    where: { id: userId, isActive: true, tokenVersion },
+    data: fields,
+    select: publicUserSelect,
+  });
+}
+
+module.exports = { login, changePassword, updateProfile };

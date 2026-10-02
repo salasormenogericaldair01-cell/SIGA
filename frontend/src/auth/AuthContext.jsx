@@ -61,7 +61,13 @@ export function AuthProvider({ children }) {
     setSessionNotice('Contraseña actualizada. Inicia sesión con la nueva contraseña.');
   }
 
-  return <AuthContext.Provider value={{ token, user, loading, sessionNotice, login, changePassword, logout: clearSession, retrySession, api }}>{children}</AuthContext.Provider>;
+  async function updateProfile(fields) {
+    const result = await api('/auth/me', { method: 'PATCH', body: fields });
+    setUser(result.user);
+    return result.user;
+  }
+
+  return <AuthContext.Provider value={{ token, user, loading, sessionNotice, login, changePassword, updateProfile, logout: clearSession, retrySession, api }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

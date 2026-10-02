@@ -11,6 +11,52 @@ const teacher = { ...admin, role: 'DOCENTE' };
 const json = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 function mockApi(handler) { global.fetch = vi.fn((url, options = {}) => handler(new URL(url).pathname, options)); }
 
+describe('Mi perfil', () => {
+  it.each([admin, secretary, teacher, student])('permite a %s abrir Mi perfil antes de Cambiar contraseña', async (account) => {
+    sessionStorage.setItem('siga_token', 'sesion');
+    mockApi((path) => path === '/api/auth/me' ? json(200, { user: account }) : json(500, {}));
+    render(<App />);
+    const profile = await screen.findByRole('link', { name: 'Mi perfil' });
+    const password = screen.getByRole('link', { name: 'Cambiar contraseña' });
+    expect(profile.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(profile);
+    expect(await screen.findByRole('heading', { name: 'Mi perfil' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Nombres')).toHaveValue(account.firstName);
+    expect(screen.getByLabelText('Apellidos')).toHaveValue(account.lastName);
+    expect(screen.queryByLabelText('Correo electrónico')).not.toBeInTheDocument();
+  });
+
+  it('actualiza el encabezado y conserva la sesión después de guardar', async () => {
+    sessionStorage.setItem('siga_token', 'sesion');
+    const changed = { ...admin, firstName: 'Lucía', lastName: 'Rojas' };
+    mockApi((path, options) => path === '/api/auth/me' && options.method === 'PATCH'
+      ? json(200, { user: changed }) : path === '/api/auth/me' ? json(200, { user: admin }) : json(500, {}));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Mi perfil' }));
+    fireEvent.change(screen.getByLabelText('Nombres'), { target: { value: '  Lucía  ' } });
+    fireEvent.change(screen.getByLabelText('Apellidos'), { target: { value: ' Rojas ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar nombre' }));
+    expect(await screen.findByText('Lucía Rojas')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Tu nombre de perfil se actualizó.');
+    const call = global.fetch.mock.calls.find(([url, options]) => new URL(url).pathname === '/api/auth/me' && options.method === 'PATCH');
+    expect(JSON.parse(call[1].body)).toEqual({ firstName: 'Lucía', lastName: 'Rojas' });
+    expect(sessionStorage.getItem('siga_token')).toBe('sesion');
+  });
+
+  it('muestra un error de API sin perder los datos editados ni cerrar sesión', async () => {
+    sessionStorage.setItem('siga_token', 'sesion');
+    mockApi((path, options) => path === '/api/auth/me' && options.method === 'PATCH'
+      ? json(400, { message: 'Datos inválidos' }) : path === '/api/auth/me' ? json(200, { user: admin }) : json(500, {}));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('link', { name: 'Mi perfil' }));
+    fireEvent.change(screen.getByLabelText('Nombres'), { target: { value: 'Lucía' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar nombre' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
+    expect(screen.getByLabelText('Nombres')).toHaveValue('Lucía');
+    expect(sessionStorage.getItem('siga_token')).toBe('sesion');
+  });
+});
+
 describe('sesión y navegación', () => {
   it('permite mostrar y ocultar la contraseña sin alterar su valor', () => {
     mockApi(() => json(401, { message: 'Credenciales inválidas' }));

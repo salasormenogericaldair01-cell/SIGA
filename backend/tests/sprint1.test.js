@@ -75,7 +75,9 @@ beforeEach(async () => {
   });
   prisma.user.update.mockImplementation(async ({ where, data, select }) => {
     const user = users.get(where.id);
-    if (!user) throw Object.assign(new Error('missing'), { code: 'P2025' });
+    if (!user || (where.isActive && !user.isActive) || (where.tokenVersion !== undefined && where.tokenVersion !== user.tokenVersion)) {
+      throw Object.assign(new Error('missing'), { code: 'P2025' });
+    }
     Object.assign(user, data);
     return selected(user, select);
   });
@@ -117,6 +119,30 @@ describe('Autenticación (Prisma simulado)', () => {
     const response = await request(app).get('/api/auth/me').set(auth(docente)).expect(200);
     expect(response.body.user).toMatchObject({ id: docente.id, role: 'DOCENTE' });
     expect(response.body.user).not.toHaveProperty('passwordHash');
+  });
+
+  test.each(['ADMIN', 'DOCENTE', 'ESTUDIANTE'])('%s puede actualizar solo sus nombres con PATCH /auth/me', async (role) => {
+    const current = [...users.values()].find((item) => item.role === role);
+    const originalHash = current.passwordHash;
+    const response = await request(app).patch('/api/auth/me').set(auth(current))
+      .send({ firstName: '  Nuevo  ', lastName: '  Apellido  ' }).expect(200);
+    expect(response.body.user).toEqual({
+      id: current.id, email: current.email, firstName: 'Nuevo', lastName: 'Apellido', role,
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|isActive/);
+    expect(current.passwordHash).toBe(originalHash);
+    expect(current.tokenVersion).toBe(0);
+    expect((await request(app).get('/api/auth/me').set(auth(current)).expect(200)).body.user.firstName).toBe('Nuevo');
+  });
+
+  test('PATCH /auth/me exige sesión y rechaza cuerpos vacíos, nombres inválidos y campos protegidos', async () => {
+    await request(app).patch('/api/auth/me').send({ firstName: 'Nuevo' }).expect(401);
+    for (const body of [{}, { firstName: ' ' }, { lastName: 'x'.repeat(101) },
+      { firstName: 'Otro', email: 'otro@example.org' }, { role: 'ADMIN' },
+      { tokenVersion: 2 }, { password: 'NuevaFraseSegura123' }, { isActive: false }]) {
+      await request(app).patch('/api/auth/me').set(auth(docente)).send(body).expect(400);
+    }
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   test('JWT inválido, vencido, sin expiración o con algoritmo distinto devuelve 401', async () => {
