@@ -1,11 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { PrismaClient } = require('@prisma/client');
-const verifyTarget = require('./verify-demo-target');
+const verifyTarget = require('../operations/verify-database-target');
 
 const prisma = new PrismaClient();
 const order = ['attendanceRecord', 'gradeRecord', 'enrollment', 'teachingAssignment', 'course', 'section', 'academicPeriod', 'grade', 'educationLevel', 'teacher', 'student', 'user'];
-const file = path.resolve(__dirname, '../.env.demo-siga_test-manifest.json');
+const file = path.resolve(__dirname, '../../.env.demo-siga_test-manifest.json');
 const demoEmails = new Set(['admin', 'secretaria', 'docente-a', 'docente-b', 'estudiante-a', 'estudiante-b'].map((name) => `demo-${name}@siga.invalid`));
 const teacherEmails = new Set(['demo-docente-a@siga.invalid', 'demo-docente-b@siga.invalid']);
 const studentCodes = new Set(['DEMO-EST-A', 'DEMO-EST-B']);

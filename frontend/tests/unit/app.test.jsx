@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import App from '../App';
-import { AuthProvider } from '../auth/AuthContext';
-import { ReferenceField } from '../components/Ui';
+import App from '../../src/App';
+import { AuthProvider } from '../../src/auth/AuthContext';
+import { ReferenceField } from '../../src/components/Ui';
 
 const admin = { id: '00000000-0000-4000-8000-000000000001', firstName: 'Ana', lastName: 'Admin', email: 'ana@test.edu', role: 'ADMIN' };
 const secretary = { ...admin, role: 'SECRETARIA' };

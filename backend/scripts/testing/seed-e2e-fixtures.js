@@ -2,8 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
-const { createUserSchema } = require('../src/validators/user.validator');
-const verifyTarget = require('./verify-demo-target');
+const { createUserSchema } = require('../../src/validators/user.validator');
+const verifyTarget = require('../operations/verify-database-target');
 
 const prisma = new PrismaClient();
 const kinds = ['attendanceRecord', 'gradeRecord', 'enrollment', 'teachingAssignment', 'course', 'section', 'academicPeriod', 'grade', 'educationLevel', 'teacher', 'student', 'user'];
@@ -11,7 +11,7 @@ const created = Object.fromEntries(kinds.map((kind) => [kind, []]));
 
 function fail(message) { throw new Error(`Colisión DEMO incompatible: ${message}`); }
 function remember(kind, record) { created[kind].push(record.id); return record; }
-function manifestPath(target) { return path.resolve(__dirname, `../.env.demo-${target}-manifest.json`); }
+function manifestPath(target) { return path.resolve(__dirname, `../../.env.demo-${target}-manifest.json`); }
 function limaToday() {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
   const pick = (type) => parts.find((part) => part.type === type).value;

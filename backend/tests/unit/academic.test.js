@@ -1,4 +1,4 @@
-jest.mock('../src/config/prisma', () => ({
+jest.mock('../../src/config/prisma', () => ({
   user: { findUnique: jest.fn() },
   educationLevel: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   grade: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -9,9 +9,9 @@ jest.mock('../src/config/prisma', () => ({
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../src/config/prisma');
-const { createApp } = require('../src/app');
-const { seedAcademic } = require('../scripts/seed-academic');
+const prisma = require('../../src/config/prisma');
+const { createApp } = require('../../src/app');
+const { seedAcademic } = require('../../scripts/setup/seed-academic');
 
 const app = createApp();
 const id = () => randomUUID();

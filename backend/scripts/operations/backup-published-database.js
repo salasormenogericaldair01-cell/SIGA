@@ -3,7 +3,7 @@ const { spawnSync } = require('node:child_process');
 const { PrismaClient } = require('@prisma/client');
 const {
   DATABASE, ControlledError, verifyDatabase, outsideRepository, archiveReadable, digest, hostDigest,
-} = require('./beta-transition-core');
+} = require('./data-transition-core');
 
 async function main() {
   const prisma = new PrismaClient();

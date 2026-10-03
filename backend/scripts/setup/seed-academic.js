@@ -1,4 +1,4 @@
-const prisma = require('../src/config/prisma');
+const prisma = require('../../src/config/prisma');
 
 const levels = [
   { code: 'INICIAL', name: 'Inicial', grades: [3, 4, 5].map((order) => ({ order, name: `${order} años` })) },

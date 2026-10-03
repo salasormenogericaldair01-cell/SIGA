@@ -1,8 +1,9 @@
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { targetFromEnvironment, verifyDatabase, outsideRepository, assertCleanLabels, requireConfirmation, checkAccessProof, emailDigest, ROLES } = require('../scripts/beta-transition-core');
-const { credentials, legacyEmails, prepare, assertLegacyGraph, retire } = require('../scripts/beta-data-transition');
+const { targetFromEnvironment, verifyDatabase, outsideRepository, assertCleanLabels, requireConfirmation, checkAccessProof, emailDigest, ROLES } = require('../../scripts/operations/data-transition-core');
+const { credentials, legacyEmails, prepare, assertLegacyGraph, retire } = require('../../scripts/operations/data-transition');
 
 const target = {
   BETA_TARGET: 'siga_demo_egx3', BETA_DATABASE_HOST: 'db.example.org',
@@ -81,8 +82,17 @@ test('consulta el nombre y puerto reales antes de permitir el destino', async ()
   prisma.$queryRaw.mockResolvedValue([{ name: 'siga_demo_egx3', port: 5432 }]);
   await expect(verifyDatabase(prisma, target)).resolves.toMatchObject({ database: 'siga_demo_egx3' });
   expect(() => outsideRepository(path.resolve(__dirname, '../.env.backup.dump'))).toThrow(/fuera de Git/);
-  expect(() => outsideRepository(path.resolve(__dirname, '../../../../backup.dump'))).toThrow(/fuera de Git/);
+  expect(() => outsideRepository(path.resolve(__dirname, '../../.env.backup.dump'))).toThrow(/fuera de Git/);
   expect(outsideRepository(path.join(os.tmpdir(), 'siga-backup.dump'))).toBeTruthy();
+});
+
+test('rechaza respaldos dentro del checkout principal al ejecutar desde un worktree externo', () => {
+  const worktree = path.resolve(__dirname, '../../..');
+  const gitEntry = path.join(worktree, '.git');
+  if (!fs.statSync(gitEntry).isFile()) return;
+  const gitdir = path.resolve(worktree, fs.readFileSync(gitEntry, 'utf8').trim().replace(/^gitdir:\s*/, ''));
+  const commonDir = fs.realpathSync(path.resolve(gitdir, fs.readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim()));
+  expect(() => outsideRepository(path.join(path.dirname(commonDir), 'backup.dump'))).toThrow(/fuera de Git/);
 });
 
 test('prepara catálogo y relaciones sin etiquetas visibles; repetir se detiene sin cambios', async () => {

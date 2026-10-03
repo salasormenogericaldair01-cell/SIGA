@@ -40,14 +40,20 @@ async function verifyDatabase(prisma, env) {
 
 function outsideRepository(file) {
   if (!file || !path.isAbsolute(file)) throw new ControlledError('Indica una ruta absoluta de respaldo fuera del repositorio');
-  const worktree = fs.realpathSync(path.resolve(__dirname, '../..')).toLowerCase();
-  const repository = path.basename(path.dirname(worktree)).toLowerCase() === '.worktrees'
-    ? fs.realpathSync(path.resolve(worktree, '../..')).toLowerCase()
-    : worktree;
+  const worktree = fs.realpathSync(path.resolve(__dirname, '../../..')).toLowerCase();
+  const gitEntry = path.join(worktree, '.git');
+  let repository = worktree;
+  if (fs.statSync(gitEntry).isFile()) {
+    const gitdir = path.resolve(worktree, fs.readFileSync(gitEntry, 'utf8').trim().replace(/^gitdir:\s*/, ''));
+    const commonDir = fs.realpathSync(path.resolve(gitdir, fs.readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim()));
+    repository = path.dirname(commonDir).toLowerCase();
+  }
   const parent = path.dirname(path.resolve(file));
   if (!fs.existsSync(parent)) throw new ControlledError('El directorio externo no existe');
   const resolved = path.join(fs.realpathSync(parent), path.basename(file)).toLowerCase();
-  if (resolved === repository || resolved.startsWith(`${repository}${path.sep}`)) throw new ControlledError('El respaldo debe estar fuera de Git');
+  if ([worktree, repository].some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))) {
+    throw new ControlledError('El respaldo debe estar fuera de Git');
+  }
   return path.resolve(file);
 }
 

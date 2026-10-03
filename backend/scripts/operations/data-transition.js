@@ -1,11 +1,11 @@
 const fs = require('node:fs');
 const bcrypt = require('bcrypt');
 const { PrismaClient, Prisma } = require('@prisma/client');
-const { createUserSchema } = require('../src/validators/user.validator');
+const { createUserSchema } = require('../../src/validators/user.validator');
 const {
   ControlledError, ROLES, FORBIDDEN, verifyDatabase, outsideRepository, backupReceipt,
   assertCleanLabels, requireConfirmation, checkAccessProof, emailDigest,
-} = require('./beta-transition-core');
+} = require('./data-transition-core');
 
 const KEYS = Object.keys(ROLES);
 const date = (value) => new Date(`${value}T00:00:00.000Z`);

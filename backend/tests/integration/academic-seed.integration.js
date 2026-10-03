@@ -1,5 +1,5 @@
 const prisma = require('../../src/config/prisma');
-const { seedAcademic, levels } = require('../../scripts/seed-academic');
+const { seedAcademic, levels } = require('../../scripts/setup/seed-academic');
 
 test('seed académico en siga_test: dos ejecuciones conservan cambios, usuarios y no duplican', async () => {
   const url = new URL(process.env.DATABASE_URL);

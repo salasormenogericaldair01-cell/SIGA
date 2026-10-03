@@ -1,6 +1,6 @@
 const fs = require('node:fs');
-const { credentials } = require('./beta-data-transition');
-const { DATABASE, ControlledError, ROLES, targetFromEnvironment, outsideRepository, backupReceipt, emailDigest } = require('./beta-transition-core');
+const { credentials } = require('./data-transition');
+const { DATABASE, ControlledError, ROLES, targetFromEnvironment, outsideRepository, backupReceipt, emailDigest } = require('./data-transition-core');
 
 const API = 'https://siga-lud0.onrender.com/api';
 

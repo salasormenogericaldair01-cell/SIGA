@@ -1,8 +1,8 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcrypt');
 const { PrismaClient, Prisma } = require('@prisma/client');
-const { credentials, legacyEmails, prepare, retire, assertNoForbiddenLabels } = require('../../scripts/beta-data-transition');
-const { ROLES, emailDigest } = require('../../scripts/beta-transition-core');
+const { credentials, legacyEmails, prepare, retire, assertNoForbiddenLabels } = require('../../scripts/operations/data-transition');
+const { ROLES, emailDigest } = require('../../scripts/operations/data-transition-core');
 
 jest.setTimeout(120000);
 const prisma = new PrismaClient();

@@ -2,7 +2,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const dotenv = require('dotenv');
 
-dotenv.config({ path: path.join(__dirname, '../.env'), quiet: true });
+dotenv.config({ path: path.join(__dirname, '../../.env'), quiet: true });
 
 const testUrl = process.env.TEST_DATABASE_URL;
 if (!testUrl) {
@@ -33,7 +33,7 @@ const result = spawnSync(process.execPath, [
   '--testRegex=\\.integration\\.js$',
 ], {
   stdio: 'inherit',
-  cwd: path.join(__dirname, '..'),
+  cwd: path.join(__dirname, '../..'),
   env: { ...process.env, NODE_ENV: 'test', DATABASE_URL: testUrl },
 });
 

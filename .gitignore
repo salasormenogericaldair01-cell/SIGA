@@ -1,0 +1,33 @@
+# Credenciales y configuración local
+/credenciales-demo.txt
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencias, respaldos y resultados temporales
+**/node_modules/
+**/dist/
+**/coverage/
+*.log
+*.dump
+*.receipt.json
+*.manifest.json
+*.tmp
+*.temp
+*.trace
+**/screenshots/
+**/test-results/
+
+# Archivos temporales de Office
+~$*.pptx
+~$*.docx
+~$*.xlsx
+**/~$*.pptx
+**/~$*.docx
+**/~$*.xlsx
+
+# Worktrees históricos dentro del checkout
+/.worktrees/

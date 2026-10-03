@@ -1,4 +1,4 @@
-jest.mock('../src/config/prisma', () => ({
+jest.mock('../../src/config/prisma', () => ({
   user: { findUnique: jest.fn() },
   teacher: { findUnique: jest.fn() }, student: { findUnique: jest.fn() },
   course: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -12,10 +12,10 @@ jest.mock('../src/config/prisma', () => ({
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../src/config/prisma');
-const { createApp } = require('../src/app');
-const { todayLimaISO } = require('../src/validators/course-record.validator');
-const { respond } = require('../src/utils/module-error');
+const prisma = require('../../src/config/prisma');
+const { createApp } = require('../../src/app');
+const { todayLimaISO } = require('../../src/validators/course-record.validator');
+const { respond } = require('../../src/utils/module-error');
 
 const app = createApp();
 const users = Object.fromEntries(['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'].map((role) => [role, {

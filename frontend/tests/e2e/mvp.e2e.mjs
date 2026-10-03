@@ -5,9 +5,9 @@ import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright-core';
 
-const requireBackend = createRequire(new URL('../../backend/package.json', import.meta.url));
+const requireBackend = createRequire(new URL('../../../backend/package.json', import.meta.url));
 const { PrismaClient } = requireBackend('@prisma/client');
-const verifyTarget = requireBackend('./scripts/verify-demo-target');
+const verifyTarget = requireBackend('./scripts/operations/verify-database-target');
 const prisma = new PrismaClient();
 const apiBase = 'http://localhost:3010/api';
 const frontendBase = 'http://localhost:5174';

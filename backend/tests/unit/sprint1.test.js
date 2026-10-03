@@ -1,4 +1,4 @@
-jest.mock('../src/config/prisma', () => ({
+jest.mock('../../src/config/prisma', () => ({
   user: {
     findUnique: jest.fn(),
     create: jest.fn(),
@@ -12,8 +12,8 @@ const request = require('supertest');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../src/config/prisma');
-const { createApp } = require('../src/app');
+const prisma = require('../../src/config/prisma');
+const { createApp } = require('../../src/app');
 
 const secret = process.env.JWT_SECRET;
 const validPassword = 'UnaFraseSegura123';

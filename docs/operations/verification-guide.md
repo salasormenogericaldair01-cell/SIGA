@@ -24,8 +24,8 @@ Para verificar con `siga_test`, usa archivos locales ignorados `backend/.env.mvp
 
 ```powershell
 cd backend
-node --env-file=.env.mvp scripts/verify-demo-target.js
-node --env-file=.env.mvp scripts/seed-demo.js
+node --env-file=.env.mvp scripts/operations/verify-database-target.js
+node --env-file=.env.mvp scripts/testing/seed-e2e-fixtures.js
 node --env-file=.env.mvp src/server.js
 ```
 
@@ -39,7 +39,7 @@ La prueba E2E usa `playwright-core` con Microsoft Edge instalado; no descarga ot
 
 El seed es manual e idempotente: crea cuentas, perfiles, periodo del año actual, dos secciones, cursos, asignaciones, matrículas, una nota y una asistencia por estudiante. Reutiliza niveles y grados activos si ya existen, sin editarlos. Nunca modifica el ADMIN existente, contraseñas o registros encontrados; ante una colisión incompatible se detiene. Requiere `DEMO_ADMIN_PASSWORD`, `DEMO_SECRETARIA_PASSWORD`, `DEMO_DOCENTE_A_PASSWORD`, `DEMO_DOCENTE_B_PASSWORD`, `DEMO_ESTUDIANTE_A_PASSWORD` y `DEMO_ESTUDIANTE_B_PASSWORD`, cada una con al menos 12 caracteres y máximo 72 bytes UTF-8. Guárdalas solo en configuración local ignorada; no las pegues en documentación ni comandos compartidos. El script E2E limpia por ID los registros que crea y revierte el cambio temporal de docente.
 
-Para limpiar únicamente los registros que **este seed creó** en `siga_test`, ejecuta `node --env-file=.env.mvp scripts/cleanup-demo-test.js`. El comando usa un manifiesto local de IDs y rechaza `siga`. No hay `TRUNCATE` ni limpieza general. El seed se ejecutó manualmente en `siga` y no forma parte del arranque. La base publicada de Render ya tiene seis cuentas y datos académicos nuevos; sus antiguos registros DEMO fueron retirados mediante el procedimiento documentado en [transicion-datos-beta.md](transicion-datos-beta.md). No repitas el seed DEMO en esa base.
+Para limpiar únicamente los registros que **este seed creó** en `siga_test`, ejecuta `node --env-file=.env.mvp scripts/testing/cleanup-e2e-fixtures.js`. El comando usa un manifiesto local de IDs y rechaza `siga`. No hay `TRUNCATE` ni limpieza general. El seed se ejecutó manualmente en `siga` y no forma parte del arranque. La base publicada de Render ya tiene seis cuentas y datos académicos nuevos; sus antiguos registros DEMO fueron retirados mediante el procedimiento documentado en [transición de datos](data-transition.md). No repitas el seed DEMO en esa base.
 
 ## Guion de 5–7 minutos
 

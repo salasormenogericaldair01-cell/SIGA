@@ -12,20 +12,23 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "jest --runInBand",
-    "test:integration": "node scripts/run-integration-tests.js",
+    "test:integration": "node scripts/testing/run-integration-tests.js",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "seed:admin": "node scripts/seed-admin.js",
-    "seed:academic": "node scripts/seed-academic.js",
-    "verify:demo-target": "node scripts/verify-demo-target.js",
-    "seed:demo": "node scripts/seed-demo.js",
-    "cleanup:demo-test": "node scripts/cleanup-demo-test.js"
+    "seed:admin": "node scripts/setup/seed-admin.js",
+    "seed:academic": "node scripts/setup/seed-academic.js",
+    "verify:database-target": "node scripts/operations/verify-database-target.js",
+    "verify:demo-target": "npm run verify:database-target",
+    "seed:e2e-fixtures": "node scripts/testing/seed-e2e-fixtures.js",
+    "seed:demo": "npm run seed:e2e-fixtures",
+    "cleanup:e2e-fixtures": "node scripts/testing/cleanup-e2e-fixtures.js",
+    "cleanup:demo-test": "npm run cleanup:e2e-fixtures"
   },
   "jest": {
     "testEnvironment": "node",
     "setupFiles": [
-      "<rootDir>/tests/setup.js"
+      "<rootDir>/tests/unit/setup.js"
     ],
     "roots": [
       "<rootDir>/tests"

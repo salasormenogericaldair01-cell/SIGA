@@ -173,12 +173,12 @@ La sesión guarda el JWT en memoria y `sessionStorage`, nunca en `localStorage`;
 
 Para verificar el frontend: `npm test`, `npm run build` y `npm audit` desde `frontend/`. Las pruebas usan HTTP simulado y no escriben en `siga` ni `siga_test`. El frontend no crea datos de demostración.
 
-La verificación final y el guion manual del MVP están en [docs/demo.md](docs/demo.md). El seed DEMO se ejecutó manualmente en `siga`; no se ejecuta automáticamente.
+La verificación final y el guion manual del MVP están en [la guía de verificación](docs/operations/verification-guide.md). El seed DEMO se ejecutó manualmente en `siga`; no se ejecuta automáticamente.
 
-La configuración para una demo en Vercel y Render está en [docs/despliegue-demo.md](docs/despliegue-demo.md). No crea recursos en la nube ni ejecuta el seed automáticamente.
+La configuración para una demo en Vercel y Render está en [la guía de despliegue](docs/operations/deployment.md). No crea recursos en la nube ni ejecuta el seed automáticamente.
 
-El respaldo y la transición de los datos publicados ya se completaron. El estado final y las protecciones del procedimiento están en [docs/transicion-datos-beta.md](docs/transicion-datos-beta.md). No vuelvas a ejecutar las etapas sobre la base actual.
+El respaldo y la transición de los datos publicados ya se completaron. El estado final y las protecciones del procedimiento están en [transición de datos](docs/operations/data-transition.md). No vuelvas a ejecutar las etapas sobre la base actual.
 
-El fundamento de seguridad, protección de datos y las brechas frente a la normativa peruana se documentan en [docs/seguridad-y-normativa.md](docs/seguridad-y-normativa.md).
+El fundamento de seguridad, protección de datos y las brechas frente a la normativa peruana se documentan en [seguridad y normativa](docs/security/security-and-regulations.md). La [arquitectura](docs/architecture/overview.md) resume los límites entre aplicaciones, scripts y pruebas.
 
-La identidad gráfica usada por la interfaz en `frontend/src/components/Brand.jsx` y `frontend/public/images/siga-logo.png` es propia de este proyecto; no es el escudo de una institución educativa. La imagen de campus en `frontend/public/images/campus-referencial.png` fue generada para la interfaz y se usa como ilustración decorativa. No representa una institución real.
+La identidad gráfica usada por la interfaz en `frontend/src/components/Brand.jsx` y `frontend/public/images/siga-logo.png` es propia de este proyecto; no es el escudo de una institución educativa. La imagen de campus en `frontend/public/images/campus-illustration.png` fue generada para la interfaz y se usa como ilustración decorativa. No representa una institución real.

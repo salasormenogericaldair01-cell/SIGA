@@ -1,4 +1,4 @@
-const verifyTarget = require('../scripts/verify-demo-target');
+const verifyTarget = require('../../scripts/operations/verify-database-target');
 
 const original = {
   DATABASE_URL: process.env.DATABASE_URL,

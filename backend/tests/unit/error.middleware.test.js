@@ -1,6 +1,6 @@
 const express = require('express');
 const request = require('supertest');
-const errorHandler = require('../src/middlewares/error.middleware');
+const errorHandler = require('../../src/middlewares/error.middleware');
 
 describe('Manejo de errores', () => {
   test('devuelve 500 sin exponer detalles internos ni stack traces', async () => {
@@ -23,7 +23,7 @@ describe('Manejo de errores', () => {
   });
 
   test('devuelve 400 para JSON inválido sin exponer el cuerpo recibido', async () => {
-    const app = require('../src/app');
+    const app = require('../../src/app');
     const response = await request(app)
       .post('/api/health')
       .set('Content-Type', 'application/json')
@@ -34,7 +34,7 @@ describe('Manejo de errores', () => {
   });
 
   test('rechaza cuerpos JSON superiores al límite configurado', async () => {
-    const app = require('../src/app');
+    const app = require('../../src/app');
     const response = await request(app)
       .post('/api/health')
       .send({ dato: 'a'.repeat(101 * 1024) })

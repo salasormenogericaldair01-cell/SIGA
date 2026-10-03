@@ -10,7 +10,7 @@ test.each([
   ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: '2' }],
 ])('rechaza configuración inválida de %s sin revelar valores', (field, overrides) => {
   const result = spawnSync(process.execPath, ['-e', "require('./src/config/env')"], {
-    cwd: path.join(__dirname, '..'),
+    cwd: path.join(__dirname, '../..'),
     env: { ...process.env, ...overrides },
     encoding: 'utf8',
   });

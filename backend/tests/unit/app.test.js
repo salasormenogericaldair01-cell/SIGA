@@ -1,5 +1,5 @@
 const request = require('supertest');
-const app = require('../src/app');
+const app = require('../../src/app');
 
 describe('GET /api/health', () => {
   test('devuelve HTTP 200', async () => {
@@ -32,7 +32,7 @@ test('CORS acepta solo el origen configurado', async () => {
 });
 
 test('un salto de proxy separa los límites de login por IP reenviada', async () => {
-  const env = require('../src/config/env');
+  const env = require('../../src/config/env');
   const previous = env.TRUST_PROXY_HOPS;
   env.TRUST_PROXY_HOPS = 1;
   const proxiedApp = app.createApp();

@@ -15,11 +15,11 @@ Crea un **Web Service** del mismo repositorio, con estos campos:
 | Root Directory | `backend` |
 | Runtime | `Node` |
 | Node version | 24.x; fija `NODE_VERSION` a una versión 24 disponible si Render selecciona otra |
-| Build Command | `npm ci --include=dev && npm run prisma:generate && npm run verify:demo-target && npm run prisma:migrate` |
+| Build Command | `npm ci --include=dev && npm run prisma:generate && npm run verify:database-target && npm run prisma:migrate` |
 | Start Command | `npm start` |
 | Health Check Path | `/api/health` |
 
-El build instala Prisma CLI, genera el cliente, **comprueba el destino** y aplica las migraciones existentes con `prisma migrate deploy`. Este último comando es idempotente, pero requiere acceso a la base durante el build. No se ejecuta ningún seed al construir o arrancar. En planes que incluyan *Pre-Deploy Command*, puedes mover `npm run verify:demo-target && npm run prisma:migrate` a ese campo y dejar `npm ci --include=dev && npm run prisma:generate` como build; Render indica que el pre-deploy no está disponible para el Web Service gratuito. [Fases de despliegue de Render](https://render.com/docs/deploys).
+El build instala Prisma CLI, genera el cliente, **comprueba el destino** y aplica las migraciones existentes con `prisma migrate deploy`. Este último comando es idempotente, pero requiere acceso a la base durante el build. No se ejecuta ningún seed al construir o arrancar. El alias anterior `verify:demo-target` se conserva para configuraciones de Render que aún lo invoquen. En planes que incluyan *Pre-Deploy Command*, puedes mover `npm run verify:database-target && npm run prisma:migrate` a ese campo y dejar `npm ci --include=dev && npm run prisma:generate` como build; Render indica que el pre-deploy no está disponible para el Web Service gratuito. [Fases de despliegue de Render](https://render.com/docs/deploys).
 
 Configura estas variables en **Environment** del servicio web:
 
@@ -55,10 +55,10 @@ Importa el mismo repositorio como proyecto **Vite** y completa:
 
 ## 4. Estado de los datos publicados
 
-El seed DEMO se ejecutó manualmente durante la preparación inicial. Después se generó un respaldo externo verificable, se crearon y comprobaron por API seis cuentas nuevas, y se retiraron los registros DEMO. La base publicada tiene ahora seis usuarios activos, tres niveles, catorce grados, un periodo y dos registros de cada entidad académica restante. Consulta el orden y las barreras de seguridad en [transicion-datos-beta.md](transicion-datos-beta.md).
+El seed DEMO se ejecutó manualmente durante la preparación inicial. Después se generó un respaldo externo verificable, se crearon y comprobaron por API seis cuentas nuevas, y se retiraron los registros DEMO. La base publicada tiene ahora seis usuarios activos, tres niveles, catorce grados, un periodo y dos registros de cada entidad académica restante. Consulta el orden y las barreras de seguridad en [transición de datos](data-transition.md).
 
-**No vuelvas a ejecutar el seed DEMO ni las etapas `prepare` o `retire` sobre este estado.** El nombre técnico `siga_demo_egx3` permanece en Render, pero no aparece como etiqueta de los datos visibles. `cleanup:demo-test` sigue limitado exclusivamente a `siga_test`. Los archivos locales de conexión, respaldo y comprobantes permanecen fuera de Git.
+**No vuelvas a ejecutar el seed DEMO ni las etapas `prepare` o `retire` sobre este estado.** El nombre técnico `siga_demo_egx3` permanece en Render, pero no aparece como etiqueta de los datos visibles. `cleanup:e2e-fixtures` sigue limitado exclusivamente a `siga_test`. Los archivos locales de conexión, respaldo y comprobantes permanecen fuera de Git.
 
 ## Comprobación antes de compartir la URL
 
-Comprueba `GET /api/health`, login y `GET /api/auth/me` en la API; desde Vercel, recarga una ruta interna y prueba los módulos de cada rol. Verifica que el navegador no tenga errores de CORS ni contenido mixto y que el limitador de login funciona detrás del proxy. Usa exclusivamente datos ficticios. Esta demo académica no sustituye una revisión de seguridad, privacidad, respaldos y recuperación para datos reales; las brechas están en [seguridad-y-normativa.md](seguridad-y-normativa.md).
+Comprueba `GET /api/health`, login y `GET /api/auth/me` en la API; desde Vercel, recarga una ruta interna y prueba los módulos de cada rol. Verifica que el navegador no tenga errores de CORS ni contenido mixto y que el limitador de login funciona detrás del proxy. Usa exclusivamente datos ficticios. Esta demo académica no sustituye una revisión de seguridad, privacidad, respaldos y recuperación para datos reales; las brechas están en [seguridad y normativa](../security/security-and-regulations.md).
