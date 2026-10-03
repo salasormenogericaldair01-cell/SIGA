@@ -181,4 +181,6 @@ El respaldo y la transición de los datos publicados ya se completaron. El estad
 
 El fundamento de seguridad, protección de datos y las brechas frente a la normativa peruana se documentan en [seguridad y normativa](docs/security/security-and-regulations.md). La [arquitectura](docs/architecture/overview.md) resume los límites entre aplicaciones, scripts y pruebas.
 
+La presentación final y el guion para los seis integrantes están en [docs/presentacion/](docs/presentacion/).
+
 La identidad gráfica usada por la interfaz en `frontend/src/components/Brand.jsx` y `frontend/public/images/siga-logo.png` es propia de este proyecto; no es el escudo de una institución educativa. La imagen de campus en `frontend/public/images/campus-illustration.png` fue generada para la interfaz y se usa como ilustración decorativa. No representa una institución real.
