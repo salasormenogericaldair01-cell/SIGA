@@ -20,6 +20,7 @@
 *.trace
 **/screenshots/
 **/test-results/
+/tests/performance/results/
 
 # Archivos temporales de Office
 ~$*.pptx

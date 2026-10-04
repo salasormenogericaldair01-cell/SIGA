@@ -36,6 +36,8 @@ Configura estas variables en **Environment** del servicio web:
 | `TRUST_PROXY_HOPS` | `1` para el proxy inmediato de Render |
 | `PORT` | Deja que Render lo proporcione; si lo defines, usa el puerto asignado al servicio |
 
+`GET /api/health` publica `version` como los primeros ocho caracteres hexadecimales del SHA. Render proporciona `RENDER_GIT_COMMIT` automáticamente; `BUILD_SHA` es una alternativa opcional para ejecuciones fuera de Render. Si ninguno es válido, se publica `unknown`. No se devuelve el valor completo ni datos del servidor. [Variables predeterminadas de Render](https://render.com/docs/environment-variables).
+
 La API escucha en `0.0.0.0:$PORT`. CORS solo permite el origen configurado. `TRUST_PROXY_HOPS=1` confía únicamente en el salto inmediato para que el límite de intentos distinga las IP reenviadas; verifica su comportamiento tras publicar si cambia la topología del proxy. El limitador actual usa memoria del proceso: los contadores se reinician al reiniciar y no se comparten entre instancias. CORS no reemplaza la autenticación ni los permisos. [Puertos de Render](https://render.com/docs/web-services), [proxies en Express](https://expressjs.com/en/guide/behind-proxies.html).
 
 ## 3. Frontend en Vercel
@@ -50,6 +52,8 @@ Importa el mismo repositorio como proyecto **Vite** y completa:
 | Output Directory | `dist` |
 | Node.js Version | `24.x` |
 | Environment Variable `VITE_API_URL` | `https://siga-lud0.onrender.com/api` |
+
+Vercel proporciona `VITE_VERCEL_GIT_COMMIT_SHA` al build de Vite cuando están habilitadas sus variables de sistema. Puede usarse `VITE_BUILD_SHA` como alternativa opcional en builds locales. SIGA valida el valor y deja únicamente ocho caracteres hexadecimales, o `unknown`, en la etiqueta HTML `meta[name="siga-build"]`. No coloques secretos en variables `VITE_*`. [Variables de Vite en Vercel](https://vercel.com/docs/environment-variables/framework-environment-variables).
 
 `frontend/vercel.json` reescribe las rutas de React Router hacia `index.html`, por lo que una recarga de `/login` o `/students` no debe devolver 404. `VITE_API_URL` es pública y se incorpora al JavaScript durante el build; **no pongas contraseñas, tokens ni secretos en variables `VITE_*`**. Al conocer el dominio final de Vercel, actualiza `CORS_ORIGIN` en Render con ese origen exacto y vuelve a desplegar la API. Los dominios de preview de Vercel no quedan permitidos automáticamente. [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Root Directory](https://vercel.com/docs/builds/configure-a-build).
 

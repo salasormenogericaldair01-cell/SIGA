@@ -9,10 +9,34 @@ describe('GET /api/health', () => {
   test('devuelve status ok y el nombre del servicio', async () => {
     const response = await request(app).get('/api/health');
 
-    expect(response.body).toEqual({
+    expect(response.body).toMatchObject({
       status: 'ok',
       service: 'sistema-gestion-academica-api',
     });
+    expect(response.body.version).toMatch(/^(unknown|[0-9a-f]{8})$/);
+  });
+
+  test('solo publica un SHA corto válido, sin información interna', async () => {
+    const previous = process.env.BUILD_SHA;
+    const previousRender = process.env.RENDER_GIT_COMMIT;
+    try {
+      delete process.env.BUILD_SHA;
+      delete process.env.RENDER_GIT_COMMIT;
+      expect((await request(app).get('/api/health').expect(200)).body.version).toBe('unknown');
+      process.env.BUILD_SHA = 'abcdef1234567890';
+      expect((await request(app).get('/api/health').expect(200)).body).toEqual({
+        status: 'ok', service: 'sistema-gestion-academica-api', version: 'abcdef12',
+      });
+      process.env.BUILD_SHA = 'host=internal;secret=value';
+      expect((await request(app).get('/api/health').expect(200)).body.version).toBe('unknown');
+      process.env.RENDER_GIT_COMMIT = '1234567abcdef';
+      expect((await request(app).get('/api/health').expect(200)).body.version).toBe('1234567a');
+    } finally {
+      if (previous === undefined) delete process.env.BUILD_SHA;
+      else process.env.BUILD_SHA = previous;
+      if (previousRender === undefined) delete process.env.RENDER_GIT_COMMIT;
+      else process.env.RENDER_GIT_COMMIT = previousRender;
+    }
   });
 });
 
@@ -26,9 +50,10 @@ describe('Ruta inexistente', () => {
 
 test('CORS acepta solo el origen configurado', async () => {
   const allowed = await request(app).get('/api/health').set('Origin', process.env.CORS_ORIGIN).expect(200);
-  const other = await request(app).get('/api/health').set('Origin', 'https://otro-sitio.invalid').expect(200);
+  const other = await request(app).get('/api/health').set('Origin', 'https://otro-sitio.invalid').expect(403);
   expect(allowed.headers['access-control-allow-origin']).toBe(process.env.CORS_ORIGIN);
   expect(other.headers).not.toHaveProperty('access-control-allow-origin');
+  expect(other.body).toEqual({ message: 'Origen no permitido' });
 });
 
 test('un salto de proxy separa los límites de login por IP reenviada', async () => {
