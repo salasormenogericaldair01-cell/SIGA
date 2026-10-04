@@ -17,6 +17,7 @@ export default function TeacherClassroom() {
   const [roster, setRoster] = useState([]);
   const [rosterPage, setRosterPage] = useState(1);
   const [rosterPagination, setRosterPagination] = useState(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
   const [kind, setKind] = useState('grades');
   const [records, setRecords] = useState([]);
   const [recordPage, setRecordPage] = useState(1);
@@ -40,10 +41,11 @@ export default function TeacherClassroom() {
   }, [api, assignmentPage, revision]);
   useEffect(() => {
     if (!assignment) return;
-    let live = true;
+    let live = true; setRosterLoading(true);
     api(`/teaching-assignments/${assignment.id}/enrollments`, { params: { status: 'ACTIVE', page: rosterPage, limit: 100 } }).then((result) => {
       if (live) { setRoster(result.data); setRosterPagination(result.pagination); }
-    }).catch((failure) => { if (live) setError(failure.message); });
+    }).catch((failure) => { if (live) { setRoster([]); setRosterPagination(null); setError(failure.message); } })
+      .finally(() => { if (live) setRosterLoading(false); });
     return () => { live = false; };
   }, [api, assignment, rosterPage, revision]);
   useEffect(() => {
@@ -54,10 +56,23 @@ export default function TeacherClassroom() {
     }).catch((failure) => { if (live) setError(failure.message); }).finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [api, assignment, config.path, recordPage, revision]);
+  function changeAssignment(item) {
+    setAssignment(item); setRosterPage(1); setRecordPage(1);
+    setRoster([]); setRosterPagination(null); setEnrollmentId('');
+    setRecords([]); setRecordPagination(null); setValue('');
+    setRosterLoading(Boolean(item)); setError(''); setSuccess('');
+  }
+  function changeRosterPage(next) {
+    setRosterPage(next); setRoster([]); setRosterPagination(null);
+    setEnrollmentId(''); setValue(''); setRosterLoading(true);
+  }
+  function changeAssignmentPage(next) {
+    setAssignmentPage(next); changeAssignment(null);
+  }
   async function save(event) {
     event.preventDefault(); setError(''); setSuccess('');
     if (!assignment?.isActive) { setError('Esta asignación está inactiva. Puedes consultar sus registros, pero no agregar nuevos.'); return; }
-    if (!enrollmentId || !value || (kind === 'attendance' && !day)) { setError('Completa los campos obligatorios.'); return; }
+    if (!enrollmentId || !roster.some((item) => item.id === enrollmentId) || !value || (kind === 'attendance' && !day)) { setError('Selecciona un estudiante de esta página y completa los campos obligatorios.'); return; }
     setBusy(true);
     try {
       await api(config.path, { method: 'POST', body: { teachingAssignmentId: assignment.id, enrollmentId, ...(kind === 'grades' ? { term: Number(term), value } : { date: day, status: value }) } });
@@ -73,14 +88,14 @@ export default function TeacherClassroom() {
     finally { setBusy(false); }
   }
   return <div className="space-y-5"><PageHeader title="Mi aula" subtitle="Selecciona una asignación para consultar estudiantes y registrar calificaciones o asistencia." /><Notice message={error} /><Notice message={success} kind="success" />
-    <section className="panel"><h2 className="mb-3 text-xl font-bold">Mis asignaciones</h2>{loading && !assignment ? <Spinner /> : assignments.length === 0 ? <p>No tienes asignaciones en esta página.</p> : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <button key={item.id} className={`module-card text-left ${assignment?.id === item.id ? 'border-[#C2410C] bg-orange-50' : ''}`} onClick={() => { setAssignment(item); setRosterPage(1); setRecordPage(1); setError(''); }}><span className="module-copy"><strong>{assignmentLabel(item)}</strong><small>{item.isActive ? 'Activa' : 'Inactiva · solo consulta'}</small></span></button>)}</div>}<Pager pagination={assignmentPagination} onPage={setAssignmentPage} /></section>
+    <section className="panel"><h2 className="mb-3 text-xl font-bold">Mis asignaciones</h2>{loading && !assignment ? <Spinner /> : assignments.length === 0 ? <p>No tienes asignaciones en esta página.</p> : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <button key={item.id} className={`module-card text-left ${assignment?.id === item.id ? 'border-[#C2410C] bg-orange-50' : ''}`} onClick={() => changeAssignment(item)}><span className="module-copy"><strong>{assignmentLabel(item)}</strong><small>{item.isActive ? 'Activa' : 'Inactiva · solo consulta'}</small></span></button>)}</div>}<Pager pagination={assignmentPagination} onPage={changeAssignmentPage} /></section>
     {assignment && <><section className="panel"><h2 className="text-xl font-bold">{assignmentLabel(assignment)}</h2><p className="mt-2 text-sm text-slate-600">Periodo: {assignment.section?.academicPeriod?.name} · Docente: {person(assignment.teacher?.user)}</p></section>
-      <section className="panel"><h2 className="mb-3 text-xl font-bold">Estudiantes matriculados</h2>{roster.length === 0 ? <p className="text-slate-600">No hay matrículas activas en esta página.</p> : <table className="data-table"><thead><tr><th>Código</th><th>Estudiante</th><th>Estado</th></tr></thead><tbody>{roster.map((item) => <tr key={item.id}><td data-label="Código">{item.student.studentCode}</td><td data-label="Estudiante">{person(item.student)}</td><td data-label="Estado"><StatusBadge value="ACTIVE" /></td></tr>)}</tbody></table>}<Pager pagination={rosterPagination} onPage={setRosterPage} /></section>
+      <section className="panel"><h2 className="mb-3 text-xl font-bold">Estudiantes matriculados</h2>{rosterLoading ? <Spinner /> : roster.length === 0 ? <p className="text-slate-600">No hay matrículas activas en esta página.</p> : <table className="data-table"><thead><tr><th>Código</th><th>Estudiante</th><th>Estado</th></tr></thead><tbody>{roster.map((item) => <tr key={item.id}><td data-label="Código">{item.student.studentCode}</td><td data-label="Estudiante">{person(item.student)}</td><td data-label="Estado"><StatusBadge value="ACTIVE" /></td></tr>)}</tbody></table>}<Pager pagination={rosterPagination} onPage={changeRosterPage} /></section>
       <section className="panel space-y-4"><div className="flex flex-wrap gap-2">{Object.entries(kinds).map(([key, option]) => <button key={key} className={kind === key ? 'btn-primary' : 'btn-secondary'} onClick={() => { setKind(key); setRecordPage(1); setValue(''); }}>{option.title}</button>)}</div>
         <h2 className="text-xl font-bold">Registrar {config.singular}</h2>
-        {assignment.isActive ? <form onSubmit={save} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><label className="label" htmlFor="roster-student">Estudiante</label><select id="roster-student" className="input" value={enrollmentId} onChange={(e) => setEnrollmentId(e.target.value)}><option value="">Selecciona</option>{roster.map((item) => <option key={item.id} value={item.id}>{item.student.studentCode} · {person(item.student)}</option>)}</select></div>
+        {assignment.isActive ? <form onSubmit={save} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><label className="label" htmlFor="roster-student">Estudiante</label><select id="roster-student" className="input" value={enrollmentId} disabled={rosterLoading || busy} onChange={(e) => setEnrollmentId(e.target.value)}><option value="">Selecciona</option>{roster.map((item) => <option key={item.id} value={item.id}>{item.student.studentCode} · {person(item.student)}</option>)}</select></div>
           {kind === 'grades' ? <div><label className="label" htmlFor="term">Bimestre</label><select id="term" className="input" value={term} onChange={(e) => setTerm(e.target.value)}>{[1, 2, 3, 4].map((number) => <option key={number} value={number}>{number}</option>)}</select></div> : <div><label className="label" htmlFor="attendance-day">Fecha</label><input id="attendance-day" className="input" type="date" value={day} onChange={(e) => setDay(e.target.value)} /></div>}
-          <div><label className="label" htmlFor="record-value">{kind === 'grades' ? 'Nota' : 'Estado'}</label><select id="record-value" className="input" value={value} onChange={(e) => setValue(e.target.value)}><option value="">Selecciona</option>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="flex items-end"><button className="btn-primary w-full" disabled={busy || roster.length === 0}>{busy ? 'Guardando…' : 'Guardar'}</button></div></form> : <p className="text-slate-600">Esta asignación está inactiva. Puedes consultar sus registros, pero no agregar ni corregir información.</p>}
+          <div><label className="label" htmlFor="record-value">{kind === 'grades' ? 'Nota' : 'Estado'}</label><select id="record-value" className="input" value={value} onChange={(e) => setValue(e.target.value)}><option value="">Selecciona</option>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="flex items-end"><button className="btn-primary w-full" disabled={busy || rosterLoading || roster.length === 0}>{busy ? 'Guardando…' : 'Guardar'}</button></div></form> : <p className="text-slate-600">Esta asignación está inactiva. Puedes consultar sus registros, pero no agregar ni corregir información.</p>}
         <h3 className="border-t pt-4 text-lg font-bold">Registros</h3>{loading ? <Spinner /> : records.length === 0 ? <p className="text-slate-600">{config.empty}</p> : <table className="data-table"><thead><tr><th>Estudiante</th><th>{kind === 'grades' ? 'Bimestre' : 'Fecha'}</th><th>{kind === 'grades' ? 'Nota' : 'Estado'}</th><th>Corregir</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td data-label="Estudiante">{person(record.enrollment?.student)}</td><td data-label={kind === 'grades' ? 'Bimestre' : 'Fecha'}>{kind === 'grades' ? record.term : dateOnly(record.date)}</td><td data-label={kind === 'grades' ? 'Nota' : 'Estado'}>{kind === 'grades' ? record.value : attendance[record.status]}</td><td data-label="Corregir"><select aria-label={`Corregir ${person(record.enrollment?.student)}`} className="input max-w-36" value={record[config.value]} disabled={busy || !assignment.isActive} onChange={(e) => correct(record, e.target.value)}>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></td></tr>)}</tbody></table>}<Pager pagination={recordPagination} onPage={setRecordPage} />
       </section></>}
   </div>;

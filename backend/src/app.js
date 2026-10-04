@@ -12,6 +12,11 @@ function createApp() {
   app.disable('x-powered-by');
   app.set('trust proxy', env.TRUST_PROXY_HOPS);
   app.use(helmet());
+  app.use((req, res, next) => {
+    const origin = req.get('Origin');
+    if (origin && origin !== env.CORS_ORIGIN) return res.status(403).json({ message: 'Origen no permitido' });
+    return next();
+  });
   app.use(cors({ origin: (origin, done) => done(null, !origin || origin === env.CORS_ORIGIN) }));
   app.use(express.json({ limit: '100kb' }));
 
