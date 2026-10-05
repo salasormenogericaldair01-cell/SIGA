@@ -8,6 +8,11 @@ test.each([
   ['CORS_ORIGIN', { CORS_ORIGIN: '*' }],
   ['DATABASE_URL', { DATABASE_URL: 'sqlite://localhost/siga' }],
   ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: '2' }],
+  ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: '-1' }],
+  ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: 'true' }],
+  ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: 'false' }],
+  ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: 'all' }],
+  ['TRUST_PROXY_HOPS', { TRUST_PROXY_HOPS: '0.5' }],
 ])('rechaza configuración inválida de %s sin revelar valores', (field, overrides) => {
   const result = spawnSync(process.execPath, ['-e', "require('./src/config/env')"], {
     cwd: path.join(__dirname, '../..'),
