@@ -1,0 +1,6 @@
+title = "SIGA - default Gitleaks rules with reviewed fixture fingerprints"
+
+[extend]
+useDefault = true
+
+# .gitleaksignore contains only exact, reviewed fixture fingerprints.

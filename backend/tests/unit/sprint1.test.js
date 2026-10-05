@@ -92,6 +92,26 @@ beforeEach(async () => {
 });
 
 describe('Autenticación (Prisma simulado)', () => {
+  test('auth impide almacenar respuestas y no expone datos sensibles; health queda independiente', async () => {
+    const login = await request(app).post('/api/auth/login')
+      .send({ email: admin.email, password: validPassword }).expect(200);
+    const me = await request(app).get('/api/auth/me').set(auth(admin)).expect(200);
+    const profile = await request(app).patch('/api/auth/me').set(auth(admin))
+      .send({ firstName: 'Nuevo' }).expect(200);
+    const change = await request(app).post('/api/auth/change-password').set(auth(admin))
+      .send({ currentPassword: 'Incorrecta12345', newPassword: 'OtraFraseSegura123' }).expect(400);
+    const denied = await request(app).get('/api/auth/me').expect(401);
+
+    for (const response of [login, me, profile, change, denied]) {
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|stack|SELECT /i);
+    }
+    for (const path of ['/api/health', '/api/ruta-inexistente']) {
+      const response = await request(app).get(path);
+      expect(response.headers).not.toHaveProperty('cache-control');
+    }
+  });
+
   test('login correcto normaliza email y no devuelve passwordHash', async () => {
     const response = await request(app).post('/api/auth/login').send({ email: ' ADMIN@COLEGIO.EDU.PE ', password: validPassword }).expect(200);
     expect(response.body.user).toMatchObject({ id: admin.id, email: admin.email, role: 'ADMIN' });
