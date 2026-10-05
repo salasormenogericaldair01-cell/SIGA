@@ -2,6 +2,10 @@
 
 Fecha: 5 de octubre de 2026 (America/Lima). Base inicial: `origin/develop` en `110e222`. Alcance: lectura de cabeceras y TLS públicos, comprobaciones autenticadas de bajo impacto, código y Git local. La primera revisión fue de solo lectura; después se publicó el commit de endurecimiento `9822b2e9864cf425f6f71a6777efd8745fe5080e` mediante los despliegues automáticos. No se cambiaron variables ni configuración manual de Vercel, Render o PostgreSQL; no se hizo escaneo activo ni prueba de carga. Los estados públicos pueden cambiar después de esta fecha. **Una beta académica no queda certificada ni apta para datos reales por esta revisión.**
 
+## Etapa de CSP obligatoria
+
+La política de `frontend/vercel.json` pasa de `Content-Security-Policy-Report-Only` a `Content-Security-Policy` **sin modificar ninguna directiva ni origen**. La decisión se apoya en el recorrido anterior de los cuatro roles, que registró cero eventos `securitypolicyviolation` en Report-Only. Ese resultado limitado no demuestra compatibilidad universal: después de publicar se comprobarán consola, eventos CSP, recursos y peticiones de cada rol en Edge; ante un recurso legítimo bloqueado se restaurará Report-Only y se documentará el origen y la directiva, sin añadir excepciones amplias. Las secciones inferiores conservan la evidencia histórica de la fase Report-Only.
+
 ## Validación pública del commit `9822b2e9`
 
 El 5 de octubre de 2026, Vercel sirvió `GET /login` con HTTP 200 y metadato de build `9822b2e9`; Render sirvió `GET /api/health` con HTTP 200 y `version: 9822b2e9`. Ambos despliegues automáticos estaban activos para el mismo SHA corto antes de probar autenticación. No se observó un nuevo 503 en esta etapa; el 503 transitorio de la revisión previa sigue sin causa confirmada y no se atribuye al nuevo despliegue.

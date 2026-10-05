@@ -7,9 +7,9 @@ const config = JSON.parse(readFileSync(configPath, 'utf8'));
 const headers = Object.fromEntries(config.headers[0].headers.map(({ key, value }) => [key, value]));
 
 describe('cabeceras del frontend en Vercel', () => {
-  test('la CSP aún es Report-Only y limita scripts y conexiones', () => {
-    const policy = headers['Content-Security-Policy-Report-Only'];
-    expect(headers).not.toHaveProperty('Content-Security-Policy');
+  test('la CSP es obligatoria y limita scripts y conexiones', () => {
+    const policy = headers['Content-Security-Policy'];
+    expect(headers).not.toHaveProperty('Content-Security-Policy-Report-Only');
     expect(policy).toContain("default-src 'self'");
     expect(policy).toContain("script-src 'self'");
     expect(policy).toContain("connect-src 'self' https://siga-lud0.onrender.com");
