@@ -6,6 +6,7 @@ const { authenticate } = require('../middlewares/auth.middleware');
 function createAuthRouter() {
   const router = express.Router();
   // Las respuestas de autenticación contienen o dependen de datos de sesión.
+  // no-store cubre éxitos y errores; Pragma no-cache es solo compatibilidad heredada.
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
