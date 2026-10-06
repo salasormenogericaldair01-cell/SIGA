@@ -1,5 +1,6 @@
 # Credenciales y configuración local
 /credenciales-demo.txt
+/docs/presentacion/guion_exposicion.md
 .env
 .env.*
 !.env.example
