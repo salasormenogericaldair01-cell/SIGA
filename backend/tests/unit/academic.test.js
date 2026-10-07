@@ -1,9 +1,13 @@
 jest.mock('../../src/config/prisma', () => ({
+  $transaction: jest.fn(),
   user: { findUnique: jest.fn() },
   educationLevel: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   grade: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   academicPeriod: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   section: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+  enrollment: { count: jest.fn() },
+  gradeRecord: { count: jest.fn() },
+  attendanceRecord: { count: jest.fn() },
 }));
 
 const request = require('supertest');
@@ -29,11 +33,15 @@ let period;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  prisma.$transaction.mockImplementation((operation) => operation(prisma));
   level = { id: id(), code: 'INICIAL', name: 'Inicial', isActive: true };
   grade = { id: id(), educationLevelId: level.id, name: '3 años', order: 3, isActive: true };
   period = { id: id(), name: '2026', startDate: new Date('2026-03-01'), endDate: new Date('2026-12-01'), isActive: true };
   records = { educationLevel: new Map([[level.id, level]]), grade: new Map([[grade.id, grade]]), academicPeriod: new Map([[period.id, period]]), section: new Map() };
   prisma.user.findUnique.mockImplementation(async ({ where }) => Object.values(users).find((u) => u.id === where.id) || null);
+  prisma.enrollment.count.mockResolvedValue(0);
+  prisma.gradeRecord.count.mockResolvedValue(0);
+  prisma.attendanceRecord.count.mockResolvedValue(0);
   for (const model of Object.keys(records)) {
     prisma[model].findUnique.mockImplementation(async ({ where }) => records[model].get(where.id) || null);
     prisma[model].findMany.mockImplementation(async ({ where }) => [...records[model].values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v)));
@@ -119,6 +127,34 @@ test('fechas se comprueban en creación y con PATCH parcial', async () => {
   await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { startDate: '2027-01-01' }).expect(400);
   await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { endDate: '2026-02-01' }).expect(400);
   await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { endDate: '2027-02-01' }).expect(200);
+});
+
+test('Secundaria filtra por nivel y la consulta solicita orden académico estable', async () => {
+  const secondary = { id: id(), code: 'SECUNDARIA', name: 'Secundaria', isActive: true };
+  const secondaryGrade = { id: id(), educationLevelId: secondary.id, name: '1.º', order: 1, isActive: true };
+  records.educationLevel.set(secondary.id, secondary);
+  records.grade.set(secondaryGrade.id, secondaryGrade);
+  const filtered = await send('get', `/api/grades?educationLevelId=${secondary.id}`, 'ADMIN').expect(200);
+  expect(filtered.body.items.map((item) => item.id)).toEqual([secondaryGrade.id]);
+  expect(prisma.grade.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+    where: { educationLevelId: secondary.id },
+    orderBy: [{ educationLevel: { code: 'asc' } }, { order: 'asc' }, { id: 'asc' }],
+  }));
+  await send('get', '/api/education-levels', 'ADMIN').expect(200);
+  expect(prisma.educationLevel.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ orderBy: [{ code: 'asc' }, { id: 'asc' }] }));
+});
+
+test('periodo con historial permite fechas compatibles y rechaza asistencias fuera del rango', async () => {
+  prisma.enrollment.count.mockResolvedValue(1);
+  prisma.gradeRecord.count.mockResolvedValue(1);
+  await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { endDate: '2026-11-01' }).expect(200);
+  expect(period.endDate.toISOString().slice(0, 10)).toBe('2026-11-01');
+  prisma.attendanceRecord.count.mockResolvedValue(1);
+  await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { startDate: '2026-07-01' }).expect(409);
+  expect(period.startDate.toISOString().slice(0, 10)).toBe('2026-03-01');
+  await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { isActive: false }).expect(200);
+  await send('get', `/api/academic-periods/${period.id}`, 'SECRETARIA').expect(200);
+  expect(period.isActive).toBe(false);
 });
 
 test('secciones de periodos distintos conviven; inactivos impiden asociaciones sin cascada', async () => {

@@ -3,6 +3,7 @@ jest.mock('../../src/config/prisma', () => ({
     findUnique: jest.fn(),
     create: jest.fn(),
     findMany: jest.fn(),
+    count: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
   },
@@ -64,7 +65,18 @@ beforeEach(async () => {
     const user = where.id ? users.get(where.id) : [...users.values()].find((item) => item.email === where.email);
     return selected(user, select);
   });
-  prisma.user.findMany.mockImplementation(async ({ select }) => [...users.values()].map((user) => selected(user, select)));
+  const matches = (where = {}) => [...users.values()].filter((user) =>
+    (where.role === undefined || user.role === where.role) &&
+    (where.isActive === undefined || user.isActive === where.isActive) &&
+    (!where.OR || where.OR.some((part) => {
+      const [field, predicate] = Object.entries(part)[0];
+      return user[field].toLowerCase().includes(predicate.contains.toLowerCase());
+    })));
+  prisma.user.count.mockImplementation(async ({ where }) => matches(where).length);
+  prisma.user.findMany.mockImplementation(async ({ select, where, skip = 0, take }) => {
+    const found = matches(where);
+    return (take === undefined ? found.slice(skip) : found.slice(skip, skip + take)).map((user) => selected(user, select));
+  });
   prisma.user.create.mockImplementation(async ({ data, select }) => {
     if ([...users.values()].some((user) => user.email === data.email)) {
       throw Object.assign(new Error('unique constraint'), { code: 'P2002' });
@@ -77,6 +89,9 @@ beforeEach(async () => {
     const user = users.get(where.id);
     if (!user || (where.isActive && !user.isActive) || (where.tokenVersion !== undefined && where.tokenVersion !== user.tokenVersion)) {
       throw Object.assign(new Error('missing'), { code: 'P2025' });
+    }
+    if (data.email && [...users.values()].some((item) => item.id !== where.id && item.email === data.email)) {
+      throw Object.assign(new Error('unique constraint'), { code: 'P2002' });
     }
     Object.assign(user, data);
     return selected(user, select);
@@ -324,4 +339,41 @@ test('rate limiting bloquea el sexto intento de login y conserva health', async 
   }
   await request(app).post('/api/auth/login').send({ email: admin.email, password: 'OtraFraseSegura123' }).expect(429);
   await request(app).get('/api/health').expect(200);
+});
+
+describe('administración segura de cuentas', () => {
+  test('detalle existe solo para ADMIN y no expone campos internos', async () => {
+    await request(app).get(`/api/users/${docente.id}`).expect(401);
+    await request(app).get(`/api/users/${docente.id}`).set(auth(docente)).expect(403);
+    const detail = await request(app).get(`/api/users/${docente.id}`).set(auth(admin)).expect(200);
+    expect(detail.body.user).toMatchObject({ id: docente.id, email: docente.email, role: 'DOCENTE' });
+    expect(detail.body.user).not.toHaveProperty('passwordHash');
+    expect(detail.body.user).not.toHaveProperty('tokenVersion');
+    await request(app).get(`/api/users/${randomUUID()}`).set(auth(admin)).expect(404);
+  });
+
+  test('edita solo nombres, apellidos y correo normalizado; protege rol, estado y hash', async () => {
+    const response = await request(app).patch(`/api/users/${estudiante.id}`).set(auth(admin))
+      .send({ firstName: '  Elena ', lastName: ' Torres ', email: ' NUEVO@COLEGIO.EDU.PE ' }).expect(200);
+    expect(response.body.user).toMatchObject({ firstName: 'Elena', lastName: 'Torres', email: 'nuevo@colegio.edu.pe', role: 'ESTUDIANTE' });
+    expect(response.body.user).not.toHaveProperty('passwordHash');
+    expect(response.body.user).not.toHaveProperty('tokenVersion');
+    for (const body of [{}, { role: 'ADMIN' }, { isActive: false }, { passwordHash: 'x' }, { tokenVersion: 100 }]) {
+      await request(app).patch(`/api/users/${estudiante.id}`).set(auth(admin)).send(body).expect(400);
+    }
+    await request(app).patch(`/api/users/${estudiante.id}`).set(auth(docente)).send({ firstName: 'Otro' }).expect(403);
+    expect(estudiante.role).toBe('ESTUDIANTE');
+    expect(estudiante.isActive).toBe(true);
+  });
+
+  test('correo duplicado devuelve 409 y filtros conservan la paginación', async () => {
+    await request(app).patch(`/api/users/${estudiante.id}`).set(auth(admin)).send({ email: docente.email.toUpperCase() }).expect(409);
+    expect(estudiante.email).toBe('estudiante@colegio.edu.pe');
+    const list = await request(app).get('/api/users?search=nombre&role=DOCENTE&isActive=true&page=1&limit=1').set(auth(admin)).expect(200);
+    expect(list.body.pagination).toMatchObject({ page: 1, limit: 1, total: 1, totalPages: 1 });
+    expect(list.body.users).toHaveLength(1);
+    expect(list.body.users[0].id).toBe(docente.id);
+    await request(app).get('/api/users?role=SUPERADMIN').set(auth(admin)).expect(400);
+    await request(app).get('/api/users?page=0').set(auth(admin)).expect(400);
+  });
 });

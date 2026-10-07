@@ -9,6 +9,7 @@ function academicController(model) {
     if (error.code === 'P2003') return res.status(404).json({ message: 'Referencia no encontrada' });
     if (error.code === 'P2004') return res.status(400).json({ message: 'Datos inválidos' });
     if (error.code === 'P2025') return res.status(404).json({ message: 'Recurso no encontrado' });
+    if (error.code === 'P2034') return res.status(409).json({ message: 'El periodo cambió durante la operación. Inténtalo de nuevo.' });
     throw error;
   };
   return {

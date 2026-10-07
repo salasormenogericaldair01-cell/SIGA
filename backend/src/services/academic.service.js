@@ -27,7 +27,12 @@ function assertDates(startDate, endDate) {
 }
 
 async function list(model, filters) {
-  return prisma[model].findMany({ where: filters, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  const orderBy = model === 'educationLevel' ? [{ code: 'asc' }, { id: 'asc' }]
+    : model === 'grade' ? [{ educationLevel: { code: 'asc' } }, { order: 'asc' }, { id: 'asc' }]
+      : model === 'section' ? [{ academicPeriod: { startDate: 'asc' } }, { grade: { educationLevel: { code: 'asc' } } }, { grade: { order: 'asc' } }, { name: 'asc' }, { id: 'asc' }]
+        : model === 'academicPeriod' ? [{ startDate: 'desc' }, { id: 'asc' }]
+          : [{ createdAt: 'asc' }, { id: 'asc' }];
+  return prisma[model].findMany({ where: filters, orderBy });
 }
 
 async function get(model, id) {
@@ -51,12 +56,33 @@ async function create(model, data) {
 }
 
 async function update(model, id, data) {
+  if (model === 'academicPeriod') {
+    return prisma.$transaction(async (db) => {
+      const current = await db.academicPeriod.findUnique({ where: { id } });
+      if (!current) throw missing(model);
+      const start = data.startDate || current.startDate;
+      const end = data.endDate || current.endDate;
+      assertDates(start, end);
+      if (data.startDate || data.endDate) {
+        // Matrículas y notas se comprueban como relaciones históricas; carecen
+        // de fecha académica propia. La asistencia sí tiene una fecha DATE.
+        const [enrollments, grades, attendanceOutside] = await Promise.all([
+          db.enrollment.count({ where: { academicPeriodId: id } }),
+          db.gradeRecord.count({ where: { enrollment: { academicPeriodId: id } } }),
+          db.attendanceRecord.count({ where: { enrollment: { academicPeriodId: id }, OR: [{ date: { lt: start } }, { date: { gt: end } }] } }),
+        ]);
+        if (attendanceOutside > 0) throw new AcademicError(409, 'Las fechas dejarían asistencias fuera del periodo');
+        // Los vínculos de matrículas y notas conservan el mismo periodo.
+        void enrollments;
+        void grades;
+      }
+      return db.academicPeriod.update({ where: { id }, data });
+    }, { isolationLevel: 'Serializable' });
+  }
   const current = await get(model, id);
   if (model === 'grade' && data.order !== undefined) {
     const level = await prisma.educationLevel.findUnique({ where: { id: current.educationLevelId } });
     assertOrder(level.code, data.order);
-  } else if (model === 'academicPeriod') {
-    assertDates(data.startDate || current.startDate, data.endDate || current.endDate);
   }
   return prisma[model].update({ where: { id }, data });
 }

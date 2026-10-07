@@ -13,12 +13,34 @@ async function createUser(data) {
   return adminUser(user);
 }
 
-async function listUsers() {
-  const users = await prisma.user.findMany({
+async function listUsers({ search, role, isActive, page, limit } = {}) {
+  const where = {
+    ...(role ? { role } : {}),
+    ...(isActive === undefined ? {} : { isActive }),
+    ...(search ? { OR: ['firstName', 'lastName', 'email'].map((field) => ({ [field]: { contains: search, mode: 'insensitive' } })) } : {}),
+  };
+  const paginated = page !== undefined || limit !== undefined;
+  const currentPage = page || 1;
+  const pageSize = limit || 20;
+  const query = {
+    where,
     select: adminUserSelect,
-    orderBy: { createdAt: 'desc' },
-  });
-  return users.map(adminUser);
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    ...(paginated ? { skip: (currentPage - 1) * pageSize, take: pageSize } : {}),
+  };
+  if (!paginated) return { users: (await prisma.user.findMany(query)).map(adminUser) };
+  const [total, users] = await Promise.all([prisma.user.count({ where }), prisma.user.findMany(query)]);
+  return { users: users.map(adminUser), pagination: { page: currentPage, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+}
+
+async function getUser(id) {
+  const user = await prisma.user.findUnique({ where: { id }, select: adminUserSelect });
+  return user ? adminUser(user) : null;
+}
+
+async function updateUser(id, data) {
+  const user = await prisma.user.update({ where: { id }, data, select: adminUserSelect });
+  return adminUser(user);
 }
 
 async function setStatus(id, isActive) {
@@ -33,4 +55,4 @@ async function setStatus(id, isActive) {
   return adminUser(updated);
 }
 
-module.exports = { createUser, listUsers, setStatus };
+module.exports = { createUser, listUsers, getUser, updateUser, setStatus };

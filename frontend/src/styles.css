@@ -100,6 +100,9 @@ body { margin: 0; min-width: 320px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .filter-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; gap: 14px; margin-bottom: 14px; padding: 16px; border: 1px solid #CBD5E1; border-radius: 9px; background: #fff; }
 .filter-search { grid-column: span 2; }
+.filter-search-field { position: relative; }
+.filter-search-field .input { width: 100%; padding-left: 40px; }
+.filter-search-icon { position: absolute; top: 50%; left: 13px; z-index: 1; color: #64748B; pointer-events: none; transform: translateY(-50%); }
 .filter-submit { width: 100%; }
 .resource-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
 .resource-body.has-editor { grid-template-columns: minmax(0, 1fr) minmax(305px, 35%); }
@@ -121,6 +124,9 @@ body { margin: 0; min-width: 320px; }
 .student-identity { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .student-identity-name { display: block; color: var(--ink, #172554); font-weight: 750; }
 .student-identity-code { display: block; margin-top: 2px; color: #64748B; font-size: .9em; font-weight: 500; }
+.account-identity { display: block; min-width: 0; overflow-wrap: anywhere; }
+.account-identity strong, .account-identity span { display: block; }
+.account-identity span { margin-top: 2px; color: #64748B; font-size: .92em; }
 .enrollment-editor-student { margin: -5px 0 16px; padding: 10px 12px; border-radius: 8px; background: #F8FAFC; }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr:hover { background: #FCFDFE; }
@@ -259,6 +265,8 @@ body { background: #F1F7F5; }
 .filter-actions .filter-submit { width: auto; min-width: 130px; border-color: #0F766E; background: #0F766E; color: #fff; }
 .filter-actions .filter-submit:hover { border-color: #0B625B; background: #0B625B; color: #fff; }
 .resource-body.has-editor { grid-template-columns: minmax(0, 1fr) minmax(350px, 410px); }
+.resource-body.has-editor.resource-body-users { grid-template-columns: minmax(0, 1fr); }
+.resource-body-users .resource-editor { grid-row: 1; width: min(100%, 640px); }
 .resource-list-heading { padding: 18px 20px; }
 .resource-list-heading h2 { color: var(--ink); font-size: 15px; }
 .resource-list-heading span { font-size: 12px; }

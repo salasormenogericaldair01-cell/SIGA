@@ -88,7 +88,10 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
         return { data: usersResult.users.filter((user) => user.isActive && user.role === (field.resource === 'teacher-users' ? 'DOCENTE' : 'ESTUDIANTE') && (!used.has(user.id) || user.id === value)), more: false };
       }
       const resource = resources[field.resource];
-      const params = resource.paginated ? { page, limit: 100, ...(resource.search && search ? { search } : {}) } : {};
+      const params = {
+        ...(resource.paginated ? { page, limit: 100, ...(resource.search && search ? { search } : {}) } : {}),
+        ...(!field.filter && ['academic-periods', 'sections', 'grades', 'education-levels', 'courses', 'students', 'teachers'].includes(field.resource) ? { isActive: 'true' } : {}),
+      };
       const result = await api(resource.path, { params });
       let data = listData(resource, result);
       if (field.resource === 'sections') {
@@ -97,13 +100,19 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
           grade: { ...grades.items.find((grade) => grade.id === section.gradeId), educationLevel: levels.items.find((level) => level.id === grades.items.find((grade) => grade.id === section.gradeId)?.educationLevelId) },
           academicPeriod: periods.items.find((period) => period.id === section.academicPeriodId),
         }));
+        if (!field.filter) data = data.filter((section) => section.grade?.isActive !== false && section.grade?.educationLevel?.isActive !== false && section.academicPeriod?.isActive !== false);
       } else if (field.resource === 'grades') {
         const levels = await api('/education-levels');
         data = data.map((grade) => ({ ...grade, educationLevel: levels.items.find((level) => level.id === grade.educationLevelId) }));
+        if (!field.filter) data = data.filter((grade) => grade.educationLevel?.isActive !== false);
       }
       return { data, more: Boolean(result.pagination && page < result.pagination.totalPages) };
     }
-    load().then((result) => { if (active) { setOptions(result.data); setMore(result.more); } }).catch((e) => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
+    load().then((result) => {
+      if (!active) return;
+      setOptions(result.data); setMore(result.more);
+      if (field.resource === 'academic-periods' && !field.filter && !value && result.data.length === 1) onChange(result.data[0].id);
+    }).catch((e) => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [api, field.resource, page, search, value]);
   return <div className="space-y-2">
