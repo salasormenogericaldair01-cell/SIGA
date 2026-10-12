@@ -57,7 +57,7 @@ Si el email normalizado ya existe, el script termina sin cambiar contraseña, ro
 | Método y ruta | Acceso | Resultado |
 | --- | --- | --- |
 | `GET /api/health` | Público | Estado del servicio |
-| `POST /api/auth/login` | Público, limitado a 5 intentos/15 min por IP | Usuario seguro y token |
+| `POST /api/auth/login` | Público; 5 fallos/15 min por cuenta y 30 fallos/15 min por IP | Usuario seguro y token |
 | `GET /api/auth/me` | Bearer JWT | Usuario actual |
 | `POST /api/auth/change-password` | Cualquier usuario autenticado, 5 intentos/15 min por IP | Cambia la contraseña y revoca sus JWT anteriores; no entrega otro token |
 | `POST /api/users` | ADMIN | Crear usuario (201) |
@@ -117,6 +117,8 @@ npm run test:integration
 ```
 
 El runner rechaza URLs que no apunten a `siga_test`; cada prueba confirma `current_database()` antes de escribir y limpia únicamente sus propios registros. La prueba del seed académico revierte todos sus cambios mediante una transacción. Si la base no está preparada, el comando falla explícitamente. Helmet, CORS de origen explícito, límite JSON de 100 kB, manejo seguro de errores y rate limit protegen las rutas; CORS no sustituye la autenticación.
+
+El login usa dos contadores independientes en memoria: cinco fallos por correo normalizado y treinta fallos por IP efectiva de Express, ambos en quince minutos. Un correo con formato inválido usa la IP también como clave del primer contador. El quinto y el trigésimo fallo aún reciben la respuesta normal de credenciales; la solicitud siguiente recibe un único 429 genérico con `Retry-After` del límite que la rechazó. Un acceso correcto ordinario no consume ninguno de los contadores, pero durante cualquier bloqueo también recibe 429. Localmente `TRUST_PROXY_HOPS=0`; en Render se configura `1` para confiar solo en el proxy inmediato. La memoria se vacía al reiniciar y no se comparte entre instancias. El bloqueo por cuenta puede ser usado por un tercero para impedir temporalmente el acceso de esa cuenta; un almacenamiento compartido y controles adicionales de abuso requieren una etapa separada.
 
 `package.json` aplica un `override` limitado de `deepmerge-ts` 8.0.0 dentro de Prisma por [GHSA-ggr8-5vv4-36mx](https://github.com/advisories/GHSA-ggr8-5vv4-36mx). Volver a verificar este ajuste al actualizar Prisma.
 
