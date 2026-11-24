@@ -4,7 +4,7 @@ const { randomBytes, randomUUID } = require('node:crypto');
 const { backendRequire, prisma, verifyLocalTestDatabase } = require('./target.cjs');
 
 const bcrypt = backendRequire('bcrypt');
-const { passwordSchema } = backendRequire('./src/validators/user.validator');
+const { passwordSchema } = backendRequire('./src/modules/auth/auth.validator');
 const output = path.resolve(__dirname, 'results');
 const manifestFile = path.join(output, 'fixture.json');
 const tokenFile = path.join(output, 'tokens.json');

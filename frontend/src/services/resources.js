@@ -12,13 +12,17 @@ export const resources = {
     create: [choice('code', 'Código', [['INICIAL', 'Inicial'], ['PRIMARIA', 'Primaria'], ['SECUNDARIA', 'Secundaria']]), field('name', 'Nombre')], edit: [field('name', 'Nombre'), field('isActive', 'Disponible', 'checkbox')] },
   grades: { title: 'Grados', path: '/grades', roles: ['ADMIN', 'SECRETARIA'], write: ['ADMIN', 'SECRETARIA'], kind: 'items',
     columns: [['educationLevel.name', 'Nivel'], ['name', 'Nombre'], ['order', 'Orden'], ['isActive', 'Estado']],
-    create: [ref('educationLevelId', 'Nivel', 'education-levels'), field('name', 'Nombre'), field('order', 'Orden', 'number')], edit: [field('name', 'Nombre'), field('order', 'Orden', 'number'), field('isActive', 'Disponible', 'checkbox')], filters: [ref('educationLevelId', 'Nivel', 'education-levels')] },
+    create: [ref('educationLevelId', 'Nivel', 'education-levels'), field('name', 'Nombre'), { ...field('order', 'Orden', 'number'), help: 'Inicial: 3 a 5 años · Primaria: 1 a 6 · Secundaria: 1 a 5.' }],
+    edit: [field('name', 'Nombre'), { ...field('order', 'Orden', 'number'), help: 'Inicial: 3 a 5 años · Primaria: 1 a 6 · Secundaria: 1 a 5.' }, field('isActive', 'Disponible', 'checkbox')],
+    filters: [ref('educationLevelId', 'Nivel', 'education-levels')] },
   'academic-periods': { title: 'Periodos académicos', path: '/academic-periods', roles: ['ADMIN', 'SECRETARIA'], write: ['ADMIN', 'SECRETARIA'], kind: 'items',
     columns: [['name', 'Nombre'], ['startDate', 'Inicio'], ['endDate', 'Fin'], ['isActive', 'Estado']],
     create: [field('name', 'Nombre'), field('startDate', 'Inicio', 'date'), field('endDate', 'Fin', 'date')], edit: [field('name', 'Nombre'), field('startDate', 'Inicio', 'date'), field('endDate', 'Fin', 'date'), field('isActive', 'Disponible', 'checkbox')] },
   sections: { title: 'Secciones', path: '/sections', roles: ['ADMIN', 'SECRETARIA'], write: ['ADMIN', 'SECRETARIA'], kind: 'items',
     columns: [['gradeId', 'Grado'], ['academicPeriodId', 'Periodo'], ['name', 'Sección'], ['isActive', 'Estado']],
-    create: [ref('gradeId', 'Grado', 'grades'), ref('academicPeriodId', 'Periodo', 'academic-periods'), { ...field('name', 'Sección'), defaultValue: 'Única' }], edit: [field('name', 'Sección'), field('isActive', 'Disponible', 'checkbox')], filters: [ref('gradeId', 'Grado', 'grades'), ref('academicPeriodId', 'Periodo', 'academic-periods')] },
+    create: [ref('gradeId', 'Grado', 'grades'), ref('academicPeriodId', 'Periodo', 'academic-periods'), { ...field('name', 'Sección'), defaultValue: 'Única', help: 'Usa "Única" si el grado no tiene divisiones (o A, B, etc.).' }],
+    edit: [{ ...field('name', 'Sección'), help: 'Usa "Única" si el grado no tiene divisiones.' }, field('isActive', 'Disponible', 'checkbox')],
+    filters: [ref('gradeId', 'Grado', 'grades'), ref('academicPeriodId', 'Periodo', 'academic-periods')] },
   students: { title: 'Estudiantes', path: '/students', roles: ['ADMIN', 'SECRETARIA'], write: ['ADMIN', 'SECRETARIA'], kind: 'data', paginated: true, search: true,
     columns: [['studentCode', 'Código'], ['fullName', 'Nombre'], ['birthDate', 'Nacimiento'], ['user', 'Cuenta vinculada'], ['isActive', 'Estado']],
     create: [field('studentCode', 'Código'), field('firstName', 'Nombres'), field('lastName', 'Apellidos'), field('birthDate', 'Fecha de nacimiento', 'date'), ref('userId', 'Cuenta de estudiante (opcional)', 'student-users', true), field('isActive', 'Estado', 'checkbox')],
@@ -36,14 +40,16 @@ export const resources = {
     columns: [['course.name', 'Curso'], ['section', 'Sección'], ['teacher.user.firstName', 'Docente'], ['isActive', 'Estado']],
     create: [ref('courseId', 'Curso', 'courses'), ref('sectionId', 'Sección', 'sections'), ref('teacherId', 'Docente', 'teachers')], edit: [ref('teacherId', 'Docente', 'teachers'), field('isActive', 'Disponible', 'checkbox')],
     filters: [ref('courseId', 'Curso', 'courses'), ref('sectionId', 'Sección', 'sections'), ref('teacherId', 'Docente', 'teachers'), ref('academicPeriodId', 'Periodo', 'academic-periods')] },
-  'grade-records': { title: 'Calificaciones', path: '/grade-records', roles: ['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'], write: ['ADMIN', 'DOCENTE'], kind: 'data', paginated: true,
-    columns: [['teachingAssignment.course.name', 'Curso'], ['enrollment.student', 'Estudiante'], ['term', 'Bimestre'], ['value', 'Nota']],
-    create: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), ref('enrollmentId', 'Matrícula', 'enrollments'), choice('term', 'Bimestre', [[1, '1'], [2, '2'], [3, '3'], [4, '4']]), choice('value', 'Nota', [['AD', 'AD'], ['A', 'A'], ['B', 'B'], ['C', 'C']])],
-    edit: [choice('value', 'Nota', [['AD', 'AD'], ['A', 'A'], ['B', 'B'], ['C', 'C']])], filters: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), ref('enrollmentId', 'Matrícula', 'enrollments'), ref('academicPeriodId', 'Periodo', 'academic-periods'), choice('term', 'Bimestre', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])] },
-  'attendance-records': { title: 'Asistencia', path: '/attendance-records', roles: ['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'], write: ['ADMIN', 'DOCENTE'], kind: 'data', paginated: true,
-    columns: [['teachingAssignment.course.name', 'Curso'], ['enrollment.student', 'Estudiante'], ['date', 'Fecha'], ['status', 'Estado']],
-    create: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), ref('enrollmentId', 'Matrícula', 'enrollments'), field('date', 'Fecha', 'date'), choice('status', 'Estado', Object.entries(attendance))],
-    edit: [choice('status', 'Estado', Object.entries(attendance))], filters: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), ref('enrollmentId', 'Matrícula', 'enrollments'), ref('academicPeriodId', 'Periodo', 'academic-periods')] },
+  'grade-records': { title: 'Calificaciones', path: '/grade-records', roles: ['ADMIN', 'SECRETARIA', 'ESTUDIANTE'], write: ['ADMIN'], allowDelete: true, kind: 'data', paginated: true,
+    columns: [['teachingAssignment.course.name', 'Curso'], ['teachingAssignment.section', 'Sección'], ['enrollment.student', 'Estudiante'], ['term', 'Bimestre'], ['value', 'Nota']],
+    create: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), { ...ref('enrollmentId', 'Matrícula', 'enrollments'), requireParam: 'teachingAssignmentId' }, choice('term', 'Bimestre', [[1, '1'], [2, '2'], [3, '3'], [4, '4']]), choice('value', 'Nota', [['AD', 'AD'], ['A', 'A'], ['B', 'B'], ['C', 'C']])],
+    edit: [choice('value', 'Nota', [['AD', 'AD'], ['A', 'A'], ['B', 'B'], ['C', 'C']])],
+    filters: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), ref('enrollmentId', 'Matrícula', 'enrollments'), ref('academicPeriodId', 'Periodo', 'academic-periods'), choice('term', 'Bimestre', [[1, '1'], [2, '2'], [3, '3'], [4, '4']])] },
+  'attendance-records': { title: 'Asistencia', path: '/attendance-records', roles: ['ADMIN', 'SECRETARIA', 'ESTUDIANTE'], write: ['ADMIN'], allowDelete: true, kind: 'data', paginated: true,
+    columns: [['teachingAssignment.course.name', 'Curso'], ['teachingAssignment.section', 'Sección'], ['enrollment.student', 'Estudiante'], ['date', 'Fecha'], ['status', 'Estado']],
+    create: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), { ...ref('enrollmentId', 'Matrícula', 'enrollments'), requireParam: 'teachingAssignmentId' }, field('date', 'Fecha', 'date'), choice('status', 'Estado', Object.entries(attendance))],
+    edit: [choice('status', 'Estado', Object.entries(attendance))],
+    filters: [ref('teachingAssignmentId', 'Asignación', 'teaching-assignments'), ref('enrollmentId', 'Matrícula', 'enrollments'), ref('academicPeriodId', 'Periodo', 'academic-periods'), field('date', 'Fecha', 'date')] },
 };
 
 function field(key, label, type = 'text') { return { key, label, type }; }
@@ -61,22 +67,23 @@ export function refLabel(resource, value) {
   if (resource === 'students') return `${person(value)} · ${value.studentCode}`;
   if (resource === 'teachers') return person(value.user);
   if (resource === 'teaching-assignments') return assignmentLabel(value);
-  if (resource === 'enrollments') return `${person(value.student)} · ${value.student?.studentCode || 'Sin código'} · ${sectionLabel(value.section)}`;
+  if (resource === 'enrollments') return `${person(value.student)} · ${value.student?.studentCode || 'Sin código'}${value.section ? ` · ${sectionLabel(value.section)}` : ''}`;
   return person(value);
 }
 
 export function displayValue(row, key, references = {}) {
   if (key === 'fullName') return person(row);
   if (key === 'section') return sectionLabel(row.section);
+  if (key === 'teachingAssignment.section') return sectionLabel(row.teachingAssignment?.section);
   if (key === 'enrollment.student') return person(row.enrollment?.student);
   if (key === 'teacher.user.firstName') return person(row.teacher?.user);
-  if (key === 'educationLevel.name') return references['education-levels']?.find((v) => v.id === row.educationLevelId)?.name || row.educationLevel?.name || row.educationLevelId;
+  if (key === 'educationLevel.name') return row.educationLevel?.name || references['education-levels']?.find((v) => v.id === row.educationLevelId)?.name || row.educationLevelId;
   if (key === 'gradeId') {
-    const grade = references.grades?.find((v) => v.id === row.gradeId);
-    const level = references['education-levels']?.find((v) => v.id === grade?.educationLevelId);
+    const grade = row.grade || references.grades?.find((v) => v.id === row.gradeId);
+    const level = grade?.educationLevel || references['education-levels']?.find((v) => v.id === grade?.educationLevelId);
     return grade ? `${grade.name}${level ? ` de ${level.name}` : ''}` : row.gradeId;
   }
-  if (key === 'academicPeriodId') return references['academic-periods']?.find((v) => v.id === row.academicPeriodId)?.name || row.academicPeriodId;
+  if (key === 'academicPeriodId') return row.academicPeriod?.name || references['academic-periods']?.find((v) => v.id === row.academicPeriodId)?.name || row.academicPeriodId;
   const value = key.split('.').reduce((item, part) => item?.[part], row);
   if (key === 'status') return attendance[value] || enrollmentStatus[value] || value;
   if (key === 'role') return roles[value] || value;

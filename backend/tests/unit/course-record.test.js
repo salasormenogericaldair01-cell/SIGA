@@ -4,8 +4,8 @@ jest.mock('../../src/config/prisma', () => ({
   course: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   teachingAssignment: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   enrollment: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
-  gradeRecord: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  attendanceRecord: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+  gradeRecord: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  attendanceRecord: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
   $transaction: jest.fn(),
 }));
 
@@ -14,8 +14,8 @@ const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
 const prisma = require('../../src/config/prisma');
 const { createApp } = require('../../src/app');
-const { todayLimaISO } = require('../../src/validators/course-record.validator');
-const { respond } = require('../../src/utils/module-error');
+const { todayLimaISO } = require('../../src/shared/pagination');
+const { respondError } = require('../../src/shared/errors');
 
 const app = createApp();
 const users = Object.fromEntries(['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE'].map((role) => [role, {
@@ -127,7 +127,39 @@ test('cuerpos estrictos, valores, bimestres y fechas', async () => {
 
 test('la restricción RESTRICT de PostgreSQL produce un 409 seguro', () => {
   const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
-  respond({ message: 'violates GradeRecord_enrollmentId_sectionId_fkey; SQL interno' }, res);
+  respondError({ message: 'violates GradeRecord_enrollmentId_sectionId_fkey; SQL interno' }, res);
   expect(res.status).toHaveBeenCalledWith(409);
   expect(res.json).toHaveBeenCalledWith({ message: 'La matrícula tiene registros académicos asociados' });
+});
+
+test('DELETE de notas y asistencia respeta permisos, alcance y estado activo; filtro por fecha en asistencia', async () => {
+  const sectionId = randomUUID();
+  const recordId = randomUUID();
+  await call('delete', `/api/grade-records/${recordId}`, 'SECRETARIA').expect(403);
+  await call('delete', `/api/grade-records/${recordId}`, 'ESTUDIANTE').expect(403);
+  await call('delete', '/api/grade-records/no-uuid', 'ADMIN').expect(400);
+
+  prisma.gradeRecord.findUnique.mockResolvedValue(null);
+  await call('delete', `/api/grade-records/${recordId}`, 'ADMIN').expect(404);
+
+  prisma.gradeRecord.findUnique.mockResolvedValue({ id: recordId, teachingAssignmentId: assignmentId, enrollmentId });
+  prisma.teachingAssignment.findUnique.mockResolvedValue({ id: assignmentId, teacherId: otherTeacherId, sectionId, isActive: true });
+  await call('delete', `/api/grade-records/${recordId}`, 'DOCENTE').expect(403);
+
+  prisma.teachingAssignment.findUnique.mockResolvedValue({ id: assignmentId, teacherId, sectionId, isActive: true, courseId: randomUUID() });
+  prisma.enrollment.findUnique.mockResolvedValue({ id: enrollmentId, sectionId, status: 'ACTIVE', student: { id: studentId, isActive: true } });
+  prisma.course.findUnique.mockResolvedValue({ id: randomUUID(), isActive: true });
+  prisma.section = { findUnique: jest.fn().mockResolvedValue({
+    id: sectionId, isActive: true,
+    grade: { isActive: true, educationLevel: { isActive: true } },
+    academicPeriod: { isActive: true, startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31') },
+  }) };
+  prisma.teacher.findUnique.mockResolvedValue({ id: teacherId, isActive: true, user: { id: users.DOCENTE.id, role: 'DOCENTE', isActive: true } });
+  prisma.gradeRecord.delete.mockResolvedValue({ id: recordId, term: 1, value: 'A' });
+  await call('delete', `/api/grade-records/${recordId}`, 'DOCENTE').expect(200);
+  expect(prisma.gradeRecord.delete).toHaveBeenCalledWith(expect.objectContaining({ where: { id: recordId } }));
+
+  const filterDay = todayLimaISO();
+  await call('get', `/api/attendance-records?date=${filterDay}`, 'ADMIN').expect(200);
+  expect(prisma.attendanceRecord.count.mock.calls[0][0].where.AND[0].date).toEqual(new Date(`${filterDay}T00:00:00.000Z`));
 });

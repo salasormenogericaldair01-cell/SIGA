@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { Notice, Spinner } from './components/Ui';
 import Layout from './components/Layout';
@@ -24,8 +24,8 @@ function AppRoutes() {
   const { token, user, loading, retrySession } = useAuth();
   return <Routes>
     <Route path="/login" element={loading ? <div className="m-8"><Spinner /></div> : token && !user ? <main className="mx-auto max-w-md p-8"><Notice message="No se pudo verificar la sesión. Revisa tu conexión e inténtalo de nuevo." /><button className="btn-primary mt-4" onClick={retrySession}>Reintentar</button></main> : <Login />} />
-    <Route path="/sin-permiso" element={<Protected><div className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-bold">Sin permisos</h1><p>No tienes acceso a este módulo.</p></div></Protected>} />
     <Route element={<Protected><Layout /></Protected>}><Route index element={<Dashboard />} />
+      <Route path="sin-permiso" element={<div className="panel panel-pad max-w-xl"><h1 className="text-2xl font-bold">Sin permisos</h1><p className="mt-2 text-slate-600">No tienes acceso a este módulo.</p><Link className="btn-primary mt-4" to="/">Volver al inicio</Link></div>} />
       <Route path="profile" element={<Profile />} />
       <Route path="change-password" element={<ChangePassword />} />
       <Route path="mi-aula" element={<Protected roles={['DOCENTE']}><TeacherClassroom /></Protected>} />

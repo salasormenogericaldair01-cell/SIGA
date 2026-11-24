@@ -163,3 +163,62 @@ it('sección única usa el grado como etiqueta principal', () => {
   expect(sectionLabel({ name: 'ÚNICA', grade: { name: '1.º', educationLevel: { name: 'Primaria' } } })).toBe('1.º de Primaria');
   expect(sectionLabel({ name: 'A', grade: { name: '1.º', educationLevel: { name: 'Primaria' } } })).toContain('Sección A');
 });
+
+it('calificaciones: ADMIN depende de Asignación→Matrícula y puede eliminar con confirmación', async () => {
+  const assignment = { id: 'assign-1', isActive: true, course: { name: 'Matemática' }, section: { id: 'sec-1', name: 'A', grade: { name: '1.º', educationLevel: { name: 'Primaria' } }, academicPeriod: { id: 'per-1', name: '2026' } } };
+  const rosterEnrollment = { id: 'enr-1', status: 'ACTIVE', sectionId: 'sec-1', student: { id: 'stu-1', studentCode: 'E-01', firstName: 'Ana', lastName: 'Rojas' } };
+  const record = { id: 'rec-1', term: 1, value: 'A', teachingAssignment: assignment, enrollment: rosterEnrollment };
+  let rows = [record];
+  open('/grade-records', admin, (url, options) => {
+    if (url.pathname === '/api/grade-records' && options.method === 'GET') return response(200, { data: rows, pagination: { page: 1, limit: 20, total: rows.length, totalPages: 1 } });
+    if (url.pathname === '/api/grade-records' && options.method === 'DELETE') return response(404, {});
+    if (url.pathname === `/api/grade-records/${record.id}` && options.method === 'DELETE') {
+      rows = [];
+      return response(200, { data: record });
+    }
+    if (url.pathname === '/api/teaching-assignments') return response(200, { data: [assignment], pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+    if (url.pathname === `/api/teaching-assignments/${assignment.id}/enrollments`) return response(200, { data: [rosterEnrollment], pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+    if (['/api/enrollments', '/api/academic-periods'].includes(url.pathname)) return response(200, url.pathname === '/api/academic-periods' ? { items: [] } : { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } });
+    return response(404, {});
+  });
+  expect(await screen.findByText('Ana Rojas')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar calificación' }));
+  const editor = screen.getByRole('region', { name: 'Registrar calificación' });
+  const enrollmentSelect = editor.querySelector('#field-enrollmentId');
+  expect(enrollmentSelect).toBeDisabled();
+  expect(editor).toHaveTextContent('Selecciona primero una asignación');
+  await waitFor(() => expect(editor.querySelector(`#field-teachingAssignmentId option[value="${assignment.id}"]`)).not.toBeNull());
+  fireEvent.change(editor.querySelector('#field-teachingAssignmentId'), { target: { value: assignment.id } });
+  await waitFor(() => expect(enrollmentSelect).not.toBeDisabled());
+  expect(editor.querySelector(`option[value="${rosterEnrollment.id}"]`)).not.toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar formulario' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Registro eliminado.');
+  await waitFor(() => expect(screen.queryByText('Ana Rojas')).not.toBeInTheDocument());
+});
+
+it('matrículas: bloquea traslado cuando ya tiene notas o asistencias y filtra por periodo', async () => {
+  const enrollmentWithRecords = {
+    id: 'enr-locked', studentId: 'stu-1', sectionId: 'sec-1', academicPeriodId: 'per-2026', status: 'ACTIVE',
+    student: { id: 'stu-1', studentCode: 'E-01', firstName: 'Luis', lastName: 'Pérez' },
+    section: { id: 'sec-1', name: 'A', grade: { name: '1.º', educationLevel: { name: 'Primaria' } } },
+    academicPeriod: { id: 'per-2026', name: '2026' },
+    _count: { gradeRecords: 2, attendanceRecords: 0 },
+  };
+  open('/enrollments', admin, (url) => {
+    if (url.pathname === '/api/enrollments') return response(200, { data: [enrollmentWithRecords], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+    if (url.pathname === '/api/sections') return response(200, { items: [{ id: 'sec-1', gradeId: 'g-1', academicPeriodId: 'per-2026', name: 'A', grade: { id: 'g-1', name: '1.º', isActive: true, educationLevel: { name: 'Primaria', isActive: true } }, academicPeriod: { id: 'per-2026', name: '2026', isActive: true } }] });
+    if (url.pathname === '/api/students') return response(200, { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } });
+    if (url.pathname === '/api/academic-periods') return response(200, { items: [{ id: 'per-2026', name: '2026', isActive: true }] });
+    return response(404, {});
+  });
+  fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+  const editor = screen.getByRole('region', { name: 'Editar matrícula' });
+  expect(editor.querySelector('#field-sectionId')).toBeDisabled();
+  expect(editor).toHaveTextContent('no se puede trasladar de sección');
+  await waitFor(() => expect(global.fetch.mock.calls.some(([url]) => {
+    const parsed = new URL(url);
+    return parsed.pathname === '/api/sections' && parsed.searchParams.get('academicPeriodId') === 'per-2026';
+  })).toBe(true));
+});

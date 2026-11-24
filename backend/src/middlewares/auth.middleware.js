@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const prisma = require('../config/prisma');
 const env = require('../config/env');
-const { publicUserSelect } = require('../utils/user');
+const { publicUserSelect } = require('../shared/user-projection');
 
 async function authenticate(req, res, next) {
   const match = /^Bearer (\S+)$/.exec(req.get('Authorization') || '');

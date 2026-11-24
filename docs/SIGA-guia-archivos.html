@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>SIGA – Guía de archivos</title>
+  <style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; background: #fff; }
+header { background: #1e293b; color: #fff; padding: 28px 44px 24px; }
+header h1 { font-size: 22pt; }
+header p  { margin-top: 6px; font-size: 9.5pt; color: #94a3b8; }
+.toc { padding: 20px 44px; border-bottom: 2px solid #e2e8f0; }
+.toc h2 { font-size: 10pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+.toc ul { list-style: none; columns: 2; gap: 12px; }
+.toc li { font-size: 9pt; color: #475569; padding: 1px 0; }
+.toc li::before { content: '›  '; color: #f97316; }
+.section-title {
+  background: #f1f5f9; border-left: 4px solid #f97316;
+  padding: 9px 44px; font-size: 10pt; font-weight: 700; color: #0f172a;
+  text-transform: uppercase; letter-spacing: .06em;
+  margin-top: 28px; page-break-before: always;
+}
+.section-title:first-of-type { page-break-before: avoid; margin-top: 0; }
+.cards { padding: 0 32px; }
+.card {
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  margin: 12px 0; overflow: hidden;
+  page-break-inside: avoid;
+}
+.card-header {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  background: #f8fafc; padding: 10px 16px; border-bottom: 1px solid #e2e8f0;
+}
+.card-file { font-family: 'Cascadia Code', Consolas, monospace; font-size: 8.5pt; color: #0ea5e9; }
+.card-title { font-size: 11pt; font-weight: 700; color: #0f172a; }
+.badge {
+  font-size: 7.5pt; font-weight: 600; padding: 2px 7px; border-radius: 99px;
+  white-space: nowrap;
+}
+.badge-config       { background: #dbeafe; color: #1d4ed8; }
+.badge-arranque     { background: #dcfce7; color: #166534; }
+.badge-rutas        { background: #fef9c3; color: #854d0e; }
+.badge-middleware   { background: #ffe4e6; color: #9f1239; }
+.badge-validator    { background: #f3e8ff; color: #6b21a8; }
+.badge-controller   { background: #ffedd5; color: #9a3412; }
+.badge-service      { background: #e0f2fe; color: #075985; }
+.badge-utilidad     { background: #f0fdf4; color: #166534; }
+.badge-prisma       { background: #fce7f3; color: #9d174d; }
+.badge-migración    { background: #f5f5f5; color: #525252; }
+.badge-entry        { background: #ecfeff; color: #155e75; }
+.badge-app          { background: #dcfce7; color: #14532d; }
+.badge-auth         { background: #fee2e2; color: #991b1b; }
+.badge-page         { background: #ede9fe; color: #4c1d95; }
+.badge-component    { background: #fff7ed; color: #9a3412; }
+.card-body { padding: 12px 16px; }
+.desc { font-size: 10pt; color: #334155; line-height: 1.6; margin-bottom: 8px; }
+.desc code { background: #f1f5f9; padding: 1px 4px; border-radius: 4px; font-family: Consolas, monospace; font-size: 8.5pt; }
+.meta { display: grid; grid-template-columns: 90px 1fr; gap: 2px 8px; font-size: 8.5pt; color: #64748b; }
+.meta dt { font-weight: 600; color: #475569; }
+.meta dd code { background: #f1f5f9; padding: 1px 3px; border-radius: 3px; font-family: Consolas, monospace; }
+@media print {
+  .section-title { page-break-before: always; }
+  .card { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+  <header>
+    <h1>SIGA – Guía de archivos</h1>
+    <p>Sistema de Gestión Académica · 57 archivos documentados · 14 de octubre de 2026</p>
+  </header>
+  <div class="toc">
+    <h2>Secciones</h2>
+    <ul><li>BACKEND — Configuración &amp; Arranque <span style="color:#cbd5e1">(4)</span></li><li>BACKEND — Rutas <span style="color:#cbd5e1">(7)</span></li><li>BACKEND — Middlewares <span style="color:#cbd5e1">(3)</span></li><li>BACKEND — Validators (Zod) <span style="color:#cbd5e1">(4)</span></li><li>BACKEND — Controllers <span style="color:#cbd5e1">(6)</span></li><li>BACKEND — Services <span style="color:#cbd5e1">(8)</span></li><li>BACKEND — Utils <span style="color:#cbd5e1">(2)</span></li><li>BASE DE DATOS — Prisma <span style="color:#cbd5e1">(6)</span></li><li>FRONTEND — Entry &amp; App <span style="color:#cbd5e1">(2)</span></li><li>FRONTEND — Auth <span style="color:#cbd5e1">(1)</span></li><li>FRONTEND — Services &amp; Utils <span style="color:#cbd5e1">(4)</span></li><li>FRONTEND — Components <span style="color:#cbd5e1">(4)</span></li><li>FRONTEND — Pages <span style="color:#cbd5e1">(6)</span></li></ul>
+  </div>
+  <div class="section-title">BACKEND — Configuración &amp; Arranque</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Variables de entorno validadas</span>
+    <span class="badge badge-config">Configuración</span>
+    <span class="card-file">backend/src/config/env.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Lee las variables del archivo <code>.env</code> y las valida con Zod antes de que cualquier módulo las use. Si falta o es inválida alguna variable obligatoria (<code>DATABASE_URL</code>, <code>JWT_SECRET</code>, <code>CORS_ORIGIN</code>, etc.), el proceso aborta con un mensaje claro. Exporta un objeto con los valores ya tipados y seguros.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Objeto &lt;code&gt;env&lt;/code&gt; con PORT, NODE_ENV, DATABASE_URL, JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_ROUNDS, CORS_ORIGIN, TRUST_PROXY_HOPS.</dd><dt>Depende de</dt><dd>.env (archivo local, no versionado)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Cliente Prisma compartido</span>
+    <span class="badge badge-config">Configuración</span>
+    <span class="card-file">backend/src/config/prisma.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea y exporta una única instancia de <code>PrismaClient</code> que es reutilizada por todos los servicios. Evitar múltiples instancias previene el agotamiento del pool de conexiones.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Instancia global de &lt;code&gt;PrismaClient&lt;/code&gt;.</dd><dt>Depende de</dt><dd>@prisma/client</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Fábrica de la aplicación Express</span>
+    <span class="badge badge-arranque">Arranque</span>
+    <span class="card-file">backend/src/app.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea y configura la aplicación Express: aplica Helmet (cabeceras de seguridad), configura CORS restringido a <code>CORS_ORIGIN</code>, limita el tamaño del body a 100 KB, monta el router principal en <code>/api</code> y registra los middlewares de 404 y manejo de errores.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Instancia de Express &lt;code&gt;app&lt;/code&gt; (también expone &lt;code&gt;app.createApp&lt;/code&gt; para tests).</dd><dt>Depende de</dt><dd>express, helmet, cors, config/env, routes/index, middlewares/*</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Punto de entrada HTTP</span>
+    <span class="badge badge-arranque">Arranque</span>
+    <span class="card-file">backend/src/server.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Llama a <code>app.listen()</code> en el puerto configurado. Es el único archivo que realmente arranca el servidor; <code>app.js</code> solo lo construye. Esto facilita importar la app en tests sin levantar un puerto real.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>(ninguno — solo efecto de lado: inicia el servidor)</dd><dt>Depende de</dt><dd>config/env, app</dd></dl>
+  </div>
+</div></div><div class="section-title">BACKEND — Rutas</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Router principal — monta todos los sub-routers</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/index.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Función fábrica que crea el router raíz y registra cada sub-router en su prefijo correspondiente. Es el único lugar donde se declara el mapa completo de la API.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;createRouter()&lt;/code&gt; → &lt;code&gt;express.Router&lt;/code&gt;.</dd><dt>Depende de</dt><dd>Todos los archivos de routes/</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Ruta de salud del servidor</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/health.routes.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Expone <code>GET /health</code> sin autenticación. Devuelve <code>{ status: "ok", service, version }</code>. Útil para balanceadores de carga y monitoreo.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;express.Router&lt;/code&gt;</dd><dt>Depende de</dt><dd>controllers/health.controller</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Rutas de autenticación con rate-limiting</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/auth.routes.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Define las 4 rutas de sesión: <code>POST /login</code> (con doble limitador: por IP y por cuenta), <code>GET /me</code>, <code>PATCH /me</code> y <code>POST /change-password</code>. Agrega cabecera <code>Cache-Control: no-store</code> a todas las respuestas de auth.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;createAuthRouter()&lt;/code&gt; → &lt;code&gt;express.Router&lt;/code&gt;.</dd><dt>Depende de</dt><dd>express-rate-limit, controllers/auth.controller, middlewares/auth.middleware</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Rutas de gestión de usuarios (solo ADMIN)</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/user.routes.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">CRUD de usuarios del sistema. Todos los endpoints requieren autenticación y rol ADMIN. Incluye <code>PATCH /:id/status</code> para activar/desactivar cuentas.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;express.Router&lt;/code&gt;</dd><dt>Depende de</dt><dd>controllers/user.controller, middlewares/auth.middleware</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Router genérico — estructura académica</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/academic.routes.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Fábrica que genera un router para cualquier recurso académico (EducationLevel, Grade, AcademicPeriod, Section). Todos los endpoints son para ADMIN y SECRETARIA. El model que recibe determina qué controller y validator se usarán.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;academicRouter(model)&lt;/code&gt; → &lt;code&gt;express.Router&lt;/code&gt;.</dd><dt>Depende de</dt><dd>controllers/academic.controller, middlewares/auth.middleware</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Router genérico — personas y matrículas</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/people-enrollment.routes.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Fábrica para Student, Teacher y Enrollment. Diferencia permisos de escritura: docentes solo puede crearlos ADMIN; estudiantes y matrículas también SECRETARIA.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;routerFor(kind)&lt;/code&gt; → &lt;code&gt;express.Router&lt;/code&gt;.</dd><dt>Depende de</dt><dd>controllers/people-enrollment.controller, middlewares/auth.middleware</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Router genérico — cursos y registros académicos</span>
+    <span class="badge badge-rutas">Rutas</span>
+    <span class="card-file">backend/src/routes/course-record.routes.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Fábrica para Course, TeachingAssignment, GradeRecord y AttendanceRecord. Los registros de notas y asistencia pueden leerlos ESTUDIANTE y DOCENTE; solo ADMIN y DOCENTE pueden escribirlos. TeachingAssignment agrega la ruta especial <code>GET /:id/enrollments</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;routerFor(kind)&lt;/code&gt; → &lt;code&gt;express.Router&lt;/code&gt;.</dd><dt>Depende de</dt><dd>controllers/course-record.controller, middlewares/auth.middleware</dd></dl>
+  </div>
+</div></div><div class="section-title">BACKEND — Middlewares</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Autenticación y autorización por roles</span>
+    <span class="badge badge-middleware">Middleware</span>
+    <span class="card-file">backend/src/middlewares/auth.middleware.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Dos funciones: <code>authenticate</code> verifica el JWT (algoritmo, expiración y <code>tokenVersion</code> contra BD — invalida sesiones revocadas). <code>authorizeRoles(...roles)</code> devuelve un middleware que rechaza con 403 si el rol del usuario no está en la lista.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ authenticate, authorizeRoles }&lt;/code&gt;</dd><dt>Depende de</dt><dd>jsonwebtoken, zod, config/prisma, config/env, utils/user</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Manejador global de errores</span>
+    <span class="badge badge-middleware">Middleware</span>
+    <span class="card-file">backend/src/middlewares/error.middleware.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Último middleware de Express (4 parámetros). Captura errores de parseo de JSON, body demasiado grande y cualquier error no controlado. Loguea solo el tipo/código del error (no el mensaje, por seguridad) y responde siempre con 500 genérico.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;errorHandler(err, req, res, next)&lt;/code&gt;</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Ruta no encontrada (404)</span>
+    <span class="badge badge-middleware">Middleware</span>
+    <span class="card-file">backend/src/middlewares/not-found.middleware.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Middleware simple que responde <code>404 { message: "Ruta no encontrada" }</code> para cualquier ruta que no haya sido capturada por el router.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;notFound(req, res)&lt;/code&gt;</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div></div><div class="section-title">BACKEND — Validators (Zod)</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Schemas de validación para usuarios y auth</span>
+    <span class="badge badge-validator">Validator</span>
+    <span class="card-file">backend/src/validators/user.validator.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Define los schemas Zod para login, cambio de contraseña, actualización de perfil, creación y edición de usuarios, y filtros de listado. La contraseña exige mínimo 12 caracteres y máximo 72 bytes UTF-8 (límite de bcrypt).</p>
+    <dl class="meta"><dt>Exporta</dt><dd>loginSchema, changePasswordSchema, updateProfileSchema, createUserSchema, updateUserSchema, listUsersSchema, statusSchema, idSchema, emailSchema, passwordSchema</dd><dt>Depende de</dt><dd>zod</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Schemas de validación para estructura académica</span>
+    <span class="badge badge-validator">Validator</span>
+    <span class="card-file">backend/src/validators/academic.validator.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Valida creación, edición y filtros para EducationLevel, Grade, AcademicPeriod y Section. Los nombres de sección se normalizan automáticamente a mayúsculas. Las fechas ISO se transforman a objetos <code>Date</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Objeto &lt;code&gt;definitions&lt;/code&gt; con schemas por modelo, y schema &lt;code&gt;uuid&lt;/code&gt;.</dd><dt>Depende de</dt><dd>zod</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Schemas para estudiantes, docentes y matrículas</span>
+    <span class="badge badge-validator">Validator</span>
+    <span class="card-file">backend/src/validators/people-enrollment.validator.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Valida datos de Student (con código alfanumérico normalizado a mayúsculas y fecha de nacimiento en el pasado), Teacher (solo userId) y Enrollment (studentId + sectionId). Incluye paginación.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Schemas &lt;code&gt;student&lt;/code&gt;, &lt;code&gt;teacher&lt;/code&gt;, &lt;code&gt;enrollment&lt;/code&gt; y schema &lt;code&gt;id&lt;/code&gt;.</dd><dt>Depende de</dt><dd>zod</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Schemas para cursos, asignaciones, notas y asistencia</span>
+    <span class="badge badge-validator">Validator</span>
+    <span class="card-file">backend/src/validators/course-record.validator.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Valida Course (código alfanumérico), TeachingAssignment, GradeRecord (bimestre 1-4, valor AD/A/B/C) y AttendanceRecord (fecha no futura en zona Lima, estado PRESENT/ABSENT/LATE/JUSTIFIED).</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Schemas &lt;code&gt;course&lt;/code&gt;, &lt;code&gt;assignment&lt;/code&gt;, &lt;code&gt;gradeRecord&lt;/code&gt;, &lt;code&gt;attendanceRecord&lt;/code&gt; y helper &lt;code&gt;todayLimaISO()&lt;/code&gt;.</dd><dt>Depende de</dt><dd>zod</dd></dl>
+  </div>
+</div></div><div class="section-title">BACKEND — Controllers</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Controller de health check</span>
+    <span class="badge badge-controller">Controller</span>
+    <span class="card-file">backend/src/controllers/health.controller.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Responde con <code>{ status, service, version }</code>. La versión se extrae de <code>BUILD_SHA</code> o <code>RENDER_GIT_COMMIT</code> si están presentes en el entorno.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ getHealth }&lt;/code&gt;</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Controller de autenticación</span>
+    <span class="badge badge-controller">Controller</span>
+    <span class="card-file">backend/src/controllers/auth.controller.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Gestiona login (valida credenciales y devuelve JWT), <code>me</code> (devuelve el usuario del token), actualización de perfil y cambio de contraseña. Mapea los resultados del servicio a respuestas HTTP específicas.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ login, me, updateProfile, changePassword }&lt;/code&gt;</dd><dt>Depende de</dt><dd>validators/user.validator, services/auth.service</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Controller de gestión de usuarios</span>
+    <span class="badge badge-controller">Controller</span>
+    <span class="card-file">backend/src/controllers/user.controller.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">CRUD completo de cuentas de usuario. Incluye protección para que un admin no pueda desactivar su propia cuenta. Mapea errores Prisma (P2002 = email duplicado, P2025 = no encontrado) a respuestas HTTP.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ create, list, get, update, setStatus }&lt;/code&gt;</dd><dt>Depende de</dt><dd>validators/user.validator, services/user.service</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Controller genérico — estructura académica</span>
+    <span class="badge badge-controller">Controller</span>
+    <span class="card-file">backend/src/controllers/academic.controller.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Fábrica que genera un controller (list, get, create, update) para cualquier recurso académico. Valida con el schema correspondiente del validator y mapea los errores de Prisma y <code>AcademicError</code> a respuestas HTTP.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;academicController(model)&lt;/code&gt; → objeto con handlers.</dd><dt>Depende de</dt><dd>services/academic.service, validators/academic.validator</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Controller genérico — personas y matrículas</span>
+    <span class="badge badge-controller">Controller</span>
+    <span class="card-file">backend/src/controllers/people-enrollment.controller.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Fábrica para Student, Teacher y Enrollment. Delega a <code>profile.service</code> o <code>enrollment.service</code> según el kind. Usa <code>respond()</code> de module-error para mapear errores de <code>ModuleError</code> y Prisma.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;controllerFor(kind)&lt;/code&gt; → objeto con handlers.</dd><dt>Depende de</dt><dd>validators/people-enrollment.validator, services/profile.service, services/enrollment.service, utils/module-error</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Controller genérico — cursos y registros académicos</span>
+    <span class="badge badge-controller">Controller</span>
+    <span class="card-file">backend/src/controllers/course-record.controller.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Fábrica para Course, Assignment, GradeRecord y AttendanceRecord. Pasa <code>req.user</code> a los servicios para que apliquen el control de acceso por rol. Incluye handler extra <code>assignmentEnrollments</code> para listar alumnos de una asignación.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;controllerFor(kind)&lt;/code&gt; → objeto con handlers.</dd><dt>Depende de</dt><dd>validators/course-record.validator, services/course-assignment.service, services/academic-record.service, utils/module-error</dd></dl>
+  </div>
+</div></div><div class="section-title">BACKEND — Services</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Lógica de autenticación</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/auth.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Implementa login (bcrypt compare + firma JWT), cambio de contraseña (con <code>updateMany</code> condicional para evitar race conditions y con incremento de <code>tokenVersion</code> que invalida todas las sesiones activas) y actualización de perfil.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ login, changePassword, updateProfile }&lt;/code&gt;</dd><dt>Depende de</dt><dd>bcrypt, jsonwebtoken, config/prisma, config/env, utils/user, validators/user.validator</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">CRUD de cuentas de usuario</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/user.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea usuarios hasheando la contraseña, lista con búsqueda/filtros/paginación, obtiene por ID, actualiza datos y activa/desactiva. Devuelve siempre la proyección <code>adminUser</code> (sin passwordHash ni tokenVersion).</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ createUser, listUsers, getUser, updateUser, setStatus }&lt;/code&gt;</dd><dt>Depende de</dt><dd>bcrypt, config/prisma, config/env, utils/user</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Lógica de estructura académica</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/academic.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">CRUD genérico para EducationLevel, Grade, AcademicPeriod y Section, con validaciones de negocio: el orden de un grado debe ser válido para su nivel, las fechas del período deben ser coherentes y no pueden dejar asistencias fuera de rango al modificarse. El update de AcademicPeriod usa una transacción Serializable.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ AcademicError, list, get, create, update }&lt;/code&gt;</dd><dt>Depende de</dt><dd>config/prisma</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Gestión de perfiles de estudiantes y docentes</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/profile.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea, actualiza y lista Student y Teacher. Verifica que el User vinculado exista, esté activo y tenga el rol correcto (ESTUDIANTE o DOCENTE). Todas las escrituras ocurren dentro de transacciones.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>listStudents, getStudent, createStudent, updateStudent, listTeachers, getTeacher, createTeacher, updateTeacher</dd><dt>Depende de</dt><dd>config/prisma, utils/user, utils/module-error</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Gestión de matrículas</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/enrollment.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea matrículas verificando que estudiante y sección estén activos y que el estudiante no tenga ya una matrícula en el mismo período. En la transferencia de sección, bloquea el traslado si ya existen notas o asistencias. Resuelve automáticamente el <code>academicPeriodId</code> desde la sección.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ list, get, create, update }&lt;/code&gt;</dd><dt>Depende de</dt><dd>config/prisma, utils/module-error</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Cursos y asignaciones docentes</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/course-assignment.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">CRUD de cursos y de TeachingAssignment. Al crear o reactivar una asignación, verifica que curso, sección y docente estén activos y que el usuario tenga rol DOCENTE. Expone también <code>assignmentEnrollments</code> para listar los alumnos de una asignación con paginación.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>listCourses, getCourse, createCourse, updateCourse, listAssignments, getAssignment, createAssignment, updateAssignment, assignmentEnrollments, requireActiveRelations</dd><dt>Depende de</dt><dd>config/prisma, utils/user, utils/module-error, services/record-access.service</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Registros de notas y asistencia</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/academic-record.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">CRUD genérico para GradeRecord y AttendanceRecord. Aplica el scope del usuario (DOCENTE solo ve sus asignaciones, ESTUDIANTE solo sus matrículas). Valida que la asignación y la matrícula pertenezcan a la misma sección y que la fecha de asistencia esté dentro del período académico. Toda escritura ocurre en transacción.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ list, get, create, update }&lt;/code&gt;</dd><dt>Depende de</dt><dd>config/prisma, utils/module-error, services/record-access.service, services/course-assignment.service</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Control de acceso por rol para registros</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">backend/src/services/record-access.service.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Determina el "scope" de un usuario para consultar o escribir registros: DOCENTE → su teacherId, ESTUDIANTE → su studentId, ADMIN/SECRETARIA → sin restricción. Provee funciones para construir cláusulas <code>where</code> de Prisma y para verificar que un registro pertenezca al scope del usuario.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>scopeFor, assignmentWhere, recordWhere, assertAssignment, assertRecord, assertWriter</dd><dt>Depende de</dt><dd>config/prisma, utils/module-error</dd></dl>
+  </div>
+</div></div><div class="section-title">BACKEND — Utils</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Error estructurado y handler de respuestas</span>
+    <span class="badge badge-utilidad">Utilidad</span>
+    <span class="card-file">backend/src/utils/module-error.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc"><code>ModuleError</code>: clase de error con código HTTP. <code>respond(error, res)</code>: función que convierte ModuleError y errores Prisma conocidos (P2002, P2003, P2025, P2034…) en respuestas JSON con el status correcto, propagando hacia arriba solo los errores inesperados.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>&lt;code&gt;{ ModuleError, respond }&lt;/code&gt;</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Proyecciones y transformadores de usuario</span>
+    <span class="badge badge-utilidad">Utilidad</span>
+    <span class="card-file">backend/src/utils/user.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Define los dos tipos de vista de usuario: <code>publicUser</code> (id, email, nombre, rol — para tokens y respuestas de auth) y <code>adminUser</code> (agrega isActive, createdAt, updatedAt — para la gestión de cuentas). Los selectores Prisma correspondientes evitan leer <code>passwordHash</code> y <code>tokenVersion</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>publicUserSelect, adminUserSelect, publicUser(), adminUser()</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div></div><div class="section-title">BASE DE DATOS — Prisma</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Esquema completo de la base de datos</span>
+    <span class="badge badge-prisma">Prisma Schema</span>
+    <span class="card-file">backend/prisma/schema.prisma</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Define los 12 modelos, 5 enums y todas las relaciones del sistema. Puntos clave: PKs UUID en todos los modelos; <code>tokenVersion</code> en User para revocación de sesiones; restricción de 1 matrícula por estudiante por período; relaciones compuestas en GradeRecord y AttendanceRecord para garantizar coherencia de sección.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Modelos: User, EducationLevel, Grade, AcademicPeriod, Section, Student, Teacher, Enrollment, Course, TeachingAssignment, GradeRecord, AttendanceRecord.</dd><dt>Depende de</dt><dd>PostgreSQL (DATABASE_URL)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Migración 1: Usuarios y autenticación</span>
+    <span class="badge badge-migración">Migración SQL</span>
+    <span class="card-file">backend/prisma/migrations/202609290001_sprint1_users_auth/migration.sql</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea el enum <code>Role</code> y la tabla <code>User</code> con sus índices. Primera migración del sprint 1.</p>
+    <dl class="meta"><dt>Depende de</dt><dd>—</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Migración 2: Estructura académica</span>
+    <span class="badge badge-migración">Migración SQL</span>
+    <span class="card-file">backend/prisma/migrations/202609290002_academic_structure/migration.sql</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea los enums <code>EducationLevelCode</code> y las tablas <code>EducationLevel</code>, <code>Grade</code>, <code>AcademicPeriod</code> y <code>Section</code> con sus relaciones e índices únicos.</p>
+    <dl class="meta"><dt>Depende de</dt><dd>Migración 1</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Migración 3: Estudiantes, docentes y matrículas</span>
+    <span class="badge badge-migración">Migración SQL</span>
+    <span class="card-file">backend/prisma/migrations/202609290003_students_teachers_enrollments/migration.sql</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea el enum <code>EnrollmentStatus</code> y las tablas <code>Student</code>, <code>Teacher</code> y <code>Enrollment</code>. Incluye el unique compuesto que impide doble matrícula por período.</p>
+    <dl class="meta"><dt>Depende de</dt><dd>Migraciones 1-2</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Migración 4: Cursos, notas y asistencia</span>
+    <span class="badge badge-migración">Migración SQL</span>
+    <span class="card-file">backend/prisma/migrations/202609290004_courses_grades_attendance/migration.sql</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Crea los enums <code>GradeValue</code> y <code>AttendanceStatus</code>, y las tablas <code>Course</code>, <code>TeachingAssignment</code>, <code>GradeRecord</code> y <code>AttendanceRecord</code>.</p>
+    <dl class="meta"><dt>Depende de</dt><dd>Migraciones 1-3</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Migración 5: Revocación de sesiones</span>
+    <span class="badge badge-migración">Migración SQL</span>
+    <span class="card-file">backend/prisma/migrations/202609300001_session_revocation/migration.sql</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Añade la columna <code>tokenVersion INT DEFAULT 0</code> a la tabla <code>User</code>. Permite invalidar todos los JWT activos de un usuario al cambiar su contraseña.</p>
+    <dl class="meta"><dt>Depende de</dt><dd>Migraciones 1-4</dd></dl>
+  </div>
+</div></div><div class="section-title">FRONTEND — Entry &amp; App</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Punto de entrada de React</span>
+    <span class="badge badge-entry">Entry</span>
+    <span class="card-file">frontend/src/main.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Importa las fuentes Inter, el CSS global y renderiza <code>App</code> en el elemento <code>#root</code> del HTML con <code>React.StrictMode</code>. También escribe la versión del build en el meta-tag <code>siga-build</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>(ninguno — efecto de lado: monta la aplicación)</dd><dt>Depende de</dt><dd>react-dom, App, utils/buildVersion, styles.css</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Árbol de rutas y protección por rol</span>
+    <span class="badge badge-app">App</span>
+    <span class="card-file">frontend/src/App.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Envuelve toda la app en <code>BrowserRouter</code> y <code>AuthProvider</code>. El componente <code>Protected</code> redirige a <code>/login</code> si no hay token, muestra un error recuperable si no hay usuario, y redirige a <code>/sin-permiso</code> si el rol no está autorizado. Las rutas de recursos se generan dinámicamente desde <code>resources.js</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;App&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>react-router, auth/AuthContext, components/*, pages/*, services/resources</dd></dl>
+  </div>
+</div></div><div class="section-title">FRONTEND — Auth</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Contexto global de sesión</span>
+    <span class="badge badge-auth">Auth / Context</span>
+    <span class="card-file">frontend/src/auth/AuthContext.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Gestiona todo el estado de autenticación: token en <code>sessionStorage</code>, objeto <code>user</code> con datos del backend, estados de carga y mensajes de sesión. Provee las funciones <code>login</code>, <code>logout</code>, <code>changePassword</code>, <code>updateProfile</code>, <code>retrySession</code> y la instancia <code>api</code>. El hook <code>useAuth()</code> da acceso a todo desde cualquier componente.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;AuthProvider&lt;/code&gt;, hook &lt;code&gt;useAuth()&lt;/code&gt;</dd><dt>Depende de</dt><dd>services/api</dd></dl>
+  </div>
+</div></div><div class="section-title">FRONTEND — Services &amp; Utils</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Fábrica del cliente HTTP</span>
+    <span class="badge badge-service">Service</span>
+    <span class="card-file">frontend/src/services/api.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc"><code>createApi(getToken, onUnauth)</code> devuelve una función que hace fetch a <code>/api{path}</code>, adjunta el JWT en la cabecera Authorization, serializa el body como JSON y parsea la respuesta. Si recibe 401 llama a <code>onUnauth</code> (que limpia la sesión). Construye query strings a partir del objeto <code>params</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;createApi(getToken, onUnauth)&lt;/code&gt;</dd><dt>Depende de</dt><dd>(nativo: fetch)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Configuración declarativa de todos los recursos</span>
+    <span class="badge badge-service">Service / Config</span>
+    <span class="card-file">frontend/src/services/resources.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Define en un solo objeto cada recurso de la API (título, path, roles de lectura y escritura, columnas de tabla, campos de formularios de creación/edición, filtros). Es la "fuente de verdad" del frontend: <code>ResourcePage</code> y <code>App</code> lo consumen para generar rutas, tablas y formularios sin código duplicado. También contiene las funciones de presentación <code>refLabel</code>, <code>displayValue</code> y <code>listData</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Objeto &lt;code&gt;resources&lt;/code&gt;, funciones &lt;code&gt;refLabel&lt;/code&gt;, &lt;code&gt;displayValue&lt;/code&gt;, &lt;code&gt;listData&lt;/code&gt;.</dd><dt>Depende de</dt><dd>utils/format</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Formateadores y etiquetas de presentación</span>
+    <span class="badge badge-utilidad">Utilidad</span>
+    <span class="card-file">frontend/src/utils/format.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Constantes de traducción (roles, asistencia, estado matrícula, nivel educativo) y funciones de formato: <code>dateOnly</code> (corta fecha ISO), <code>person</code> (nombre completo), <code>sectionLabel</code> (etiqueta legible de sección), <code>assignmentLabel</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>roles, attendance, enrollmentStatus, levelCode, dateOnly, person, sectionLabel, assignmentLabel</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Versión del build</span>
+    <span class="badge badge-utilidad">Utilidad</span>
+    <span class="card-file">frontend/src/utils/buildVersion.js</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Extrae y normaliza la versión del build a partir de variables de entorno de Vite o Vercel. Devuelve los primeros 8 caracteres del hash de commit, o "unknown" si no está disponible.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Función &lt;code&gt;getBuildVersion(...candidates)&lt;/code&gt;</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div></div><div class="section-title">FRONTEND — Components</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Logotipo de SIGA</span>
+    <span class="badge badge-component">Component</span>
+    <span class="card-file">frontend/src/components/Brand.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Renderiza el logo de SIGA (<code>/images/siga-logo.png</code>). Acepta props <code>compact</code> e <code>inverse</code> para variantes de tamaño y color.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;Brand&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Librería de iconos SVG inline</span>
+    <span class="badge badge-component">Component</span>
+    <span class="card-file">frontend/src/components/Icon.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Renderiza iconos SVG inline con paths predefinidos para todos los módulos del sistema (home, users, students, teachers, grades, courses, etc.) y acciones (search, menu, close, logout, chevrons). Acepta <code>name</code>, <code>size</code> y <code>className</code>.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;Icon&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>(ninguna)</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Shell de navegación principal</span>
+    <span class="badge badge-component">Component</span>
+    <span class="card-file">frontend/src/components/Layout.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Estructura visual de la app autenticada: barra lateral con menú filtrado por rol, cabecera móvil con hamburguesa, área de contenido con <code>Outlet</code>. Incluye enlace a "Mi Aula" para docentes, perfil, cambio de contraseña y botón de cierre de sesión.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;Layout&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>react-router, auth/AuthContext, components/Brand, components/Icon, services/resources, utils/format</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Librería de componentes UI reutilizables</span>
+    <span class="badge badge-component">Component</span>
+    <span class="card-file">frontend/src/components/Ui.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Colección de componentes genéricos usados en toda la app: <code>Spinner</code>, <code>Notice</code> (alertas de error/éxito), <code>Button</code>, <code>PageHeader</code>, <code>StatusBadge</code>, <code>FilterPanel</code>, <code>ConfirmDialog</code>, <code>Pager</code> (paginación), <code>ReferenceField</code> (select con carga dinámica desde la API) y <code>FormField</code> (campo de formulario genérico con soporte para text, date, checkbox, choice y ref).</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Spinner, Notice, Button, PageHeader, StatusBadge, FilterPanel, ConfirmDialog, Pager, ReferenceField, FormField</dd><dt>Depende de</dt><dd>react, auth/AuthContext, services/resources, utils/format</dd></dl>
+  </div>
+</div></div><div class="section-title">FRONTEND — Pages</div><div class="cards">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Pantalla de inicio de sesión</span>
+    <span class="badge badge-page">Page</span>
+    <span class="card-file">frontend/src/pages/Login.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Formulario de email y contraseña con toggle de visibilidad. Llama a <code>useAuth().login()</code> y redirige al dashboard si la sesión es exitosa. Si ya hay sesión activa, redirige directamente. Muestra el aviso de contraseña cambiada.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;Login&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>react-router, auth/AuthContext, components/Ui, components/Icon, components/Brand</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Pantalla de inicio (dashboard)</span>
+    <span class="badge badge-page">Page</span>
+    <span class="card-file">frontend/src/pages/Dashboard.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Hero personalizado por rol con acceso directo al módulo principal del usuario. Grilla de módulos disponibles agrupados en Administración, Estructura académica y Gestión académica, filtrados según el rol actual.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;Dashboard&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>react-router, auth/AuthContext, components/Icon, services/resources, utils/format</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">CRUD genérico basado en resources.js</span>
+    <span class="badge badge-page">Page</span>
+    <span class="card-file">frontend/src/pages/ResourcePage.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Página reutilizable que renderiza tabla, formularios de creación/edición, filtros y paginación para cualquier recurso definido en <code>resources.js</code>. Soporta referencias cruzadas entre recursos, confirmación antes de... (no existe delete, solo edición). Un solo componente sirve a 11 rutas distintas.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;ResourcePage&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>auth/AuthContext, components/Ui, services/resources, utils/format</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Vista &quot;Mi Aula&quot; para docentes</span>
+    <span class="badge badge-page">Page</span>
+    <span class="card-file">frontend/src/pages/TeacherClassroom.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Panel exclusivo del rol DOCENTE. Muestra las asignaciones del docente autenticado, el listado de alumnos matriculados y permite registrar o corregir calificaciones (por bimestre) y asistencia (por fecha). Alterna entre las dos modalidades con botones.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;TeacherClassroom&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>auth/AuthContext, components/Ui, utils/format</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Pantalla de perfil de usuario</span>
+    <span class="badge badge-page">Page</span>
+    <span class="card-file">frontend/src/pages/Profile.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Permite al usuario autenticado consultar y editar su nombre. Llama a <code>useAuth().updateProfile()</code> y actualiza el contexto global al guardar.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;Profile&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>auth/AuthContext, components/Ui</dd></dl>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Pantalla de cambio de contraseña</span>
+    <span class="badge badge-page">Page</span>
+    <span class="card-file">frontend/src/pages/ChangePassword.jsx</span>
+  </div>
+  <div class="card-body">
+    <p class="desc">Formulario para ingresar contraseña actual y nueva (con confirmación). Llama a <code>useAuth().changePassword()</code>, que cierra la sesión automáticamente y muestra el aviso en la pantalla de login.</p>
+    <dl class="meta"><dt>Exporta</dt><dd>Componente &lt;code&gt;ChangePassword&lt;/code&gt; (default)</dd><dt>Depende de</dt><dd>auth/AuthContext, components/Ui</dd></dl>
+  </div>
+</div></div>
+</body>
+</html>

@@ -2,7 +2,7 @@ const { z } = require('zod');
 const bcrypt = require('bcrypt');
 const prisma = require('../../src/config/prisma');
 const env = require('../../src/config/env');
-const { createUserSchema } = require('../../src/validators/user.validator');
+const { createUserSchema } = require('../../src/modules/users/users.validator');
 
 async function main() {
   const input = z.object({

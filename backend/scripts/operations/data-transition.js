@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const bcrypt = require('bcrypt');
 const { PrismaClient, Prisma } = require('@prisma/client');
-const { createUserSchema } = require('../../src/validators/user.validator');
+const { createUserSchema } = require('../../src/modules/users/users.validator');
 const {
   ControlledError, ROLES, FORBIDDEN, verifyDatabase, outsideRepository, backupReceipt,
   assertCleanLabels, requireConfirmation, checkAccessProof, emailDigest,

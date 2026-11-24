@@ -142,6 +142,10 @@ test('Secundaria filtra por nivel y la consulta solicita orden académico establ
   }));
   await send('get', '/api/education-levels', 'ADMIN').expect(200);
   expect(prisma.educationLevel.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ orderBy: [{ code: 'asc' }, { id: 'asc' }] }));
+  await send('get', '/api/sections', 'ADMIN').expect(200);
+  expect(prisma.section.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+    include: expect.objectContaining({ grade: expect.any(Object), academicPeriod: expect.any(Object) }),
+  }));
 });
 
 test('periodo con historial permite fechas compatibles y rechaza asistencias fuera del rango', async () => {

@@ -12,3 +12,10 @@ export const sectionLabel = (section) => {
   return `${grade}${level ? ` de ${level}` : ''}${group}${section.academicPeriod ? ` · ${section.academicPeriod.name}` : ''}`;
 };
 export const assignmentLabel = (assignment) => assignment ? `${assignment.course?.name || 'Curso'} · ${sectionLabel(assignment.section)}` : '—';
+export function todayLimaISO() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const part = (type) => parts.find((value) => value.type === type).value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}

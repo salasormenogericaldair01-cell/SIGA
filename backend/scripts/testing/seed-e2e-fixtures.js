@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
-const { createUserSchema } = require('../../src/validators/user.validator');
+const { createUserSchema } = require('../../src/modules/users/users.validator');
 const verifyTarget = require('../operations/verify-database-target');
 
 const prisma = new PrismaClient();

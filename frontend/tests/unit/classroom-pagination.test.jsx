@@ -57,3 +57,39 @@ it('Mi aula pagina 125 matrículas sin conservar UUID ni filas de otra página o
   expect(select.options[1].value).toBe(rosterB[0].id);
   expect(global.fetch.mock.calls.every(([raw]) => new URL(raw).pathname !== '/api/students')).toBe(true);
 });
+
+it('Mi aula permite registro grupal en lote y eliminación de registros con confirmación', async () => {
+  sessionStorage.setItem('siga_token', 'local-only');
+  let gradeRows = [{ id: uuid(9001), enrollmentId: rosterB[0].id, term: 1, value: 'B', enrollment: rosterB[0] }];
+  global.fetch = vi.fn(async (raw, options = {}) => {
+    const url = new URL(raw);
+    if (url.pathname === '/api/auth/me') return json({ user: teacher });
+    if (url.pathname === '/api/teaching-assignments') return json({ data: [second], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+    if (url.pathname.endsWith('/enrollments')) return json({ data: rosterB, pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+    if (url.pathname === '/api/grade-records' && (!options.method || options.method === 'GET')) {
+      return json({ data: gradeRows, pagination: { page: 1, limit: 20, total: gradeRows.length, totalPages: 1 } });
+    }
+    if (url.pathname === `/api/grade-records/${uuid(9001)}` && options.method === 'PATCH') {
+      const body = JSON.parse(options.body);
+      gradeRows = [{ ...gradeRows[0], ...body }];
+      return json({ data: gradeRows[0] });
+    }
+    if (url.pathname === `/api/grade-records/${uuid(9001)}` && options.method === 'DELETE') {
+      gradeRows = [];
+      return json({ data: { id: uuid(9001) } });
+    }
+    throw new Error(`Solicitud inesperada: ${options.method || 'GET'} ${url.pathname}`);
+  });
+  render(<App />);
+  fireEvent.click((await screen.findAllByRole('link', { name: 'Mi aula' }))[0]);
+  fireEvent.click(await screen.findByRole('button', { name: /Comunicación/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Registro grupal' }));
+  const bulkSelect = await screen.findByLabelText(`Lote ${rosterB[0].student.firstName} ${rosterB[0].student.lastName}`);
+  await waitFor(() => expect(bulkSelect).toHaveValue('B'));
+  fireEvent.change(bulkSelect, { target: { value: 'AD' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar lote' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Se guardaron 1 registro.');
+  fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Registro eliminado.');
+});

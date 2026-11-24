@@ -1,5 +1,5 @@
 jest.mock('../../src/config/prisma', () => ({
-  user: { findUnique: jest.fn() },
+  user: { findUnique: jest.fn(), update: jest.fn() },
   student: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   teacher: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   enrollment: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -117,4 +117,31 @@ test('matrículas: listado y detalle identifican desde Student sin cuenta y cons
   expect(JSON.stringify([listed.body, detail.body])).not.toContain('passwordHash');
   await call('get', `/api/enrollments/${id}`, 'DOCENTE').expect(403);
   await call('get', `/api/enrollments/${id}`, 'ESTUDIANTE').expect(403);
+});
+
+test('crear o editar estudiante con userId sincroniza nombres en User', async () => {
+  const studentId = randomUUID();
+  prisma.user.findUnique.mockImplementation(async ({ where }) => {
+    if (where.id === users.ESTUDIANTE.id) return users.ESTUDIANTE;
+    return Object.values(users).find((u) => u.id === where.id) || null;
+  });
+  prisma.user.update.mockResolvedValue({ ...users.ESTUDIANTE, firstName: 'Sofía', lastName: 'Quispe' });
+  prisma.student.create.mockResolvedValue({ id: studentId, studentCode: 'E-99', firstName: 'Sofía', lastName: 'Quispe', userId: users.ESTUDIANTE.id });
+
+  await call('post', '/api/students', 'ADMIN', {
+    studentCode: 'E-99', firstName: 'Sofía', lastName: 'Quispe', birthDate: '2014-02-10', userId: users.ESTUDIANTE.id,
+  }).expect(201);
+  expect(prisma.user.update).toHaveBeenCalledWith({
+    where: { id: users.ESTUDIANTE.id },
+    data: { firstName: 'Sofía', lastName: 'Quispe' },
+  });
+
+  prisma.user.update.mockClear();
+  prisma.student.findUnique.mockResolvedValue({ id: studentId, userId: users.ESTUDIANTE.id, firstName: 'Sofía', lastName: 'Quispe' });
+  prisma.student.update.mockResolvedValue({ id: studentId, firstName: 'Sofía Lucía', lastName: 'Quispe', userId: users.ESTUDIANTE.id });
+  await call('patch', `/api/students/${studentId}`, 'ADMIN', { firstName: 'Sofía Lucía' }).expect(200);
+  expect(prisma.user.update).toHaveBeenCalledWith({
+    where: { id: users.ESTUDIANTE.id },
+    data: { firstName: 'Sofía Lucía', lastName: 'Quispe' },
+  });
 });

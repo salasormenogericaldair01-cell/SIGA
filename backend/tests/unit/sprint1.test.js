@@ -1,10 +1,14 @@
 jest.mock('../../src/config/prisma', () => ({
+  $transaction: jest.fn(),
   user: {
     findUnique: jest.fn(),
     create: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
+  },
+  student: {
     updateMany: jest.fn(),
   },
 }));
@@ -55,6 +59,8 @@ async function makeUser(role, email, isActive = true) {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  prisma.$transaction.mockImplementation((operation) => operation(prisma));
+  prisma.student.updateMany.mockResolvedValue({ count: 0 });
   users = new Map();
   admin = await makeUser('ADMIN', 'admin@colegio.edu.pe');
   docente = await makeUser('DOCENTE', 'docente@colegio.edu.pe');
@@ -168,6 +174,10 @@ describe('Autenticación (Prisma simulado)', () => {
     expect(current.passwordHash).toBe(originalHash);
     expect(current.tokenVersion).toBe(0);
     expect((await request(app).get('/api/auth/me').set(auth(current)).expect(200)).body.user.firstName).toBe('Nuevo');
+    expect(prisma.student.updateMany).toHaveBeenCalledWith({
+      where: { userId: current.id },
+      data: { firstName: 'Nuevo', lastName: 'Apellido' },
+    });
   });
 
   test('PATCH /auth/me exige sesión y rechaza cuerpos vacíos, nombres inválidos y campos protegidos', async () => {
@@ -364,6 +374,10 @@ describe('administración segura de cuentas', () => {
     await request(app).patch(`/api/users/${estudiante.id}`).set(auth(docente)).send({ firstName: 'Otro' }).expect(403);
     expect(estudiante.role).toBe('ESTUDIANTE');
     expect(estudiante.isActive).toBe(true);
+    expect(prisma.student.updateMany).toHaveBeenCalledWith({
+      where: { userId: estudiante.id },
+      data: { firstName: 'Elena', lastName: 'Torres' },
+    });
   });
 
   test('correo duplicado devuelve 409 y filtros conservan la paginación', async () => {

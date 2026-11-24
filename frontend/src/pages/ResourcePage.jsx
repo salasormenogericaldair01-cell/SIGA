@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import Icon from '../components/Icon';
 import { Button, ConfirmDialog, DataTable, EmptyState, FilterPanel, FormField, Notice, PageHeader, Pager, ReferenceField, Spinner, StatusBadge, StudentIdentity } from '../components/Ui';
 import { displayValue, listData, resources } from '../services/resources';
-import { dateOnly } from '../utils/format';
+import { dateOnly, sectionLabel, todayLimaISO } from '../utils/format';
 
 const singularNames = {
   users: 'usuario', 'education-levels': 'nivel', grades: 'grado', 'academic-periods': 'periodo académico',
@@ -29,7 +29,7 @@ const descriptions = {
 
 function initialValue(field, item) {
   const value = item?.[field.key];
-  if (field.type === 'date') return dateOnly(value);
+  if (field.type === 'date') return value ? dateOnly(value) : (field.key === 'date' ? todayLimaISO() : '');
   if (field.type === 'checkbox') return item ? Boolean(value) : true;
   return value === null ? '' : value ?? field.defaultValue ?? '';
 }
@@ -50,8 +50,36 @@ function Editor({ resource, item, mode = 'data', onClose, onSaved, user }) {
   const { api } = useAuth();
   const isEdit = Boolean(item);
   const isStudent = resource.path === '/students';
-  const fields = (isEdit ? mode === 'status' ? resource.statusEdit : resource.edit : resource.create).filter((field) => !(field.key === 'userId' && isStudent && user.role !== 'ADMIN'));
-  const [values, setValues] = useState(() => Object.fromEntries(fields.map((field) => [field.key, initialValue(field, item)])));
+  const isEnrollment = resource.path === '/enrollments';
+  const isRecord = resource.path === '/grade-records' || resource.path === '/attendance-records';
+  const baseFields = (isEdit ? mode === 'status' ? resource.statusEdit : resource.edit : resource.create)
+    .filter((field) => !(field.key === 'userId' && isStudent && user.role !== 'ADMIN'));
+  const [values, setValues] = useState(() => Object.fromEntries(baseFields.map((field) => [field.key, initialValue(field, item)])));
+  const hasEnrollmentRecords = isEnrollment && isEdit && Boolean(item._count?.gradeRecords || item._count?.attendanceRecords);
+  const fields = baseFields.map((field) => {
+    if (isEnrollment && isEdit && field.key === 'sectionId') {
+      return {
+        ...field,
+        extraParams: { academicPeriodId: item.academicPeriodId },
+        currentLabel: sectionLabel(item.section),
+        ...(hasEnrollmentRecords ? { disabled: true, help: 'Esta matrícula ya tiene calificaciones o asistencia registradas; no se puede trasladar de sección.' } : {}),
+      };
+    }
+    if (isRecord && !isEdit && field.key === 'enrollmentId') {
+      return {
+        ...field,
+        extraParams: values.teachingAssignmentId ? { teachingAssignmentId: values.teachingAssignmentId } : undefined,
+        ...(!values.teachingAssignmentId ? { disabled: true, help: 'Selecciona primero una asignación para listar sus estudiantes matriculados.' } : {}),
+      };
+    }
+    if (isRecord && !isEdit && field.key === 'date') {
+      return { ...field, max: todayLimaISO() };
+    }
+    if (isStudent && isEdit && field.key === 'userId' && item.user) {
+      return { ...field, currentLabel: `${item.user.firstName} ${item.user.lastName} · ${item.user.email}` };
+    }
+    return field;
+  });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,6 +104,7 @@ function Editor({ resource, item, mode = 'data', onClose, onSaved, user }) {
     setErrors({});
     const body = {};
     fields.forEach((field) => {
+      if (field.disabled) return;
       const value = values[field.key];
       if (isEdit && value === initialValue(field, item)) return;
       if (!isEdit && field.optional && !value) return;
@@ -93,10 +122,11 @@ function Editor({ resource, item, mode = 'data', onClose, onSaved, user }) {
   return <section ref={editorRef} className="panel resource-editor" aria-label={title}>
     <div className="resource-editor-heading"><h2>{title}</h2><button type="button" className="icon-button" aria-label="Cerrar formulario" onClick={onClose}><Icon name="close" size={16} /></button></div>
     {isEdit && resource.path === '/enrollments' && <p className="enrollment-editor-student"><StudentIdentity student={item.student} /></p>}
-    {isEdit && isStudent && <p className="form-help">Cuenta vinculada: {item.user ? `${item.user.firstName} ${item.user.lastName} · ${item.user.email}` : 'Sin cuenta vinculada'}</p>}
+    {isEdit && isStudent && <p className="form-help">Cuenta vinculada: {item.user ? `${item.user.firstName} ${item.user.lastName} · ${item.user.email} (los nombres se sincronizan)` : 'Sin cuenta vinculada'}</p>}
     <form onSubmit={save}><div className="editor-fields">
-      {fields.map((field) => <FormField key={field.key} field={field} value={values[field.key]} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} error={errors[field.key]} disabled={busy} />)}
+      {fields.map((field) => <FormField key={field.key} field={field} value={values[field.key]} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value, ...(isRecord && !isEdit && field.key === 'teachingAssignmentId' ? { enrollmentId: '' } : {}) }))} error={errors[field.key]} disabled={busy} />)}
       {isStudent && !isEdit && <p className="form-help"><Icon name="info" size={16} />Puedes registrar al estudiante sin vincular una cuenta de acceso.</p>}
+      {isEnrollment && !isEdit && <p className="form-help"><Icon name="info" size={16} />Si el estudiante tiene una matrícula cancelada en este periodo, edítala para reactivarla.</p>}
       <div className="editor-footer"><Notice message={error} /><div className="form-actions"><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar'}</Button></div></div>
     </div></form>
     {pending && <ConfirmDialog title={pending.status === 'CANCELLED' ? 'Cancelar matrícula' : 'Desactivar registro'} message={pending.status === 'CANCELLED' ? '¿Cancelar esta matrícula? Los datos históricos se conservarán.' : '¿Desactivar este registro? Sus datos se conservarán.'} busy={busy} onCancel={() => setPending(null)} onConfirm={() => { const body = pending; setPending(null); send(body); }} />}
@@ -119,6 +149,8 @@ export default function ResourcePage({ resourceKey }) {
   const [editor, setEditor] = useState(undefined);
   const [editMode, setEditMode] = useState('data');
   const [detail, setDetail] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const requestGeneration = useRef(0);
   const [referenceRows, setReferenceRows] = useState({});
   const [revision, setRevision] = useState(0);
@@ -148,16 +180,37 @@ export default function ResourcePage({ resourceKey }) {
 
   useEffect(() => {
     if (resourceKey !== 'sections' && resourceKey !== 'grades') return;
+    if (!rows.length) return;
+    const needsFallback = resourceKey === 'sections'
+      ? rows.some((row) => !row.grade || !row.academicPeriod || !row.grade.educationLevel)
+      : rows.some((row) => !row.educationLevel);
+    if (!needsFallback) return;
     let live = true;
     const refs = resourceKey === 'sections' ? ['grades', 'academic-periods', 'education-levels'] : ['education-levels'];
     Promise.all(refs.map(async (key) => [key, listData(resources[key], await api(resources[key].path))])).then((entries) => { if (live) setReferenceRows(Object.fromEntries(entries)); }).catch(() => {});
     return () => { live = false; };
-  }, [api, resourceKey]);
+  }, [api, resourceKey, rows]);
 
   async function showDetail(row) {
     setError(''); setSuccess('');
     try { const result = await api(`${resource.path}/${row.id}`); setDetail(result.item || result.data || result.user || row); }
     catch (failure) { setError(failure.message); }
+  }
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true); setError(''); setSuccess('');
+    try {
+      await api(`${resource.path}/${deleteTarget.id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      setDetail(null);
+      setSuccess('Registro eliminado.');
+      reload();
+    } catch (failure) {
+      setDeleteTarget(null);
+      setError(failure.message);
+    } finally {
+      setDeleting(false);
+    }
   }
   function invalidateList() { requestGeneration.current += 1; setRows([]); setPagination(null); setLoading(true); setDetail(null); setError(''); }
   function applyFilters(event) { event.preventDefault(); invalidateList(); setPage(1); setFilter(Object.fromEntries(Object.entries(draft).filter(([, value]) => value !== ''))); }
@@ -173,7 +226,7 @@ export default function ResourcePage({ resourceKey }) {
   const renderCell = (row, key) => resourceKey === 'enrollments' && key === 'student'
     ? <StudentIdentity student={row.student} />
     : resourceKey === 'students' && key === 'user' ? <span className="account-identity">{row.user ? <><strong>{row.user.firstName} {row.user.lastName}</strong><span>{row.user.email}</span></> : 'Sin cuenta vinculada'}</span>
-    : resourceKey === 'sections' && key === 'name' && row.name?.toLocaleUpperCase('es') === 'ÚNICA' ? 'Sin división'
+    : resourceKey === 'sections' && key === 'name' && row.name?.toLocaleUpperCase('es') === 'ÚNICA' ? 'Única'
     : key === 'isActive' || (resourceKey === 'enrollments' && key === 'status') ? <StatusBadge value={row[key]} /> : displayValue(row, key, referenceRows);
 
   return <div>
@@ -183,15 +236,16 @@ export default function ResourcePage({ resourceKey }) {
     {(resource.search || resource.filters || resource.paginated || activeFilter) && <FilterPanel onSubmit={applyFilters} onClear={Object.values(draft).some((value) => value !== '') || Object.keys(filter).length ? clearFilters : undefined}>
       {resource.search && <div className="filter-search"><label className="label" htmlFor="search">{isStudent ? 'Buscar por código o nombre' : resourceKey === 'users' ? 'Buscar por nombre o correo' : 'Buscar'}</label><div className="filter-search-field"><Icon name="search" size={16} className="filter-search-icon" /><input id="search" className="input" placeholder={isStudent ? 'Código o nombre' : resourceKey === 'users' ? 'Nombre, apellido o correo' : 'Buscar'} value={draft.search || ''} onChange={(e) => setDraft((v) => ({ ...v, search: e.target.value }))} /></div></div>}
       {activeFilter && <div><label className="label" htmlFor="active-filter">Estado</label><select id="active-filter" className="input" value={draft.isActive || ''} onChange={(e) => setDraft((v) => ({ ...v, isActive: e.target.value }))}><option value="">Todos</option><option value="true">Activos</option><option value="false">{resourceKey === 'academic-periods' ? 'Históricos' : 'Inactivos'}</option></select></div>}
-      {allowedFilters.map((field) => <div key={field.key}><label className="label" htmlFor={`filter-${field.key}`}>{field.label}</label>{field.type === 'ref' ? <ReferenceField field={{ ...field, filter: true }} id={`filter-${field.key}`} value={draft[field.key] || ''} onChange={(value) => { setDraft((current) => ({ ...current, [field.key]: value })); if (resourceKey === 'grades' && field.key === 'educationLevelId') { invalidateList(); setPage(1); setFilter((current) => { const next = { ...current }; if (value) next.educationLevelId = value; else delete next.educationLevelId; return next; }); } }} /> : <select id={`filter-${field.key}`} className="input" value={draft[field.key] || ''} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">Todos</option>{field.options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>}</div>)}
+      {allowedFilters.map((field) => <div key={field.key}><label className="label" htmlFor={`filter-${field.key}`}>{field.label}</label>{field.type === 'ref' ? <ReferenceField field={{ ...field, filter: true }} id={`filter-${field.key}`} value={draft[field.key] || ''} onChange={(value) => { setDraft((current) => ({ ...current, [field.key]: value })); if (resourceKey === 'grades' && field.key === 'educationLevelId') { invalidateList(); setPage(1); setFilter((current) => { const next = { ...current }; if (value) next.educationLevelId = value; else delete next.educationLevelId; return next; }); } }} /> : field.type === 'choice' ? <select id={`filter-${field.key}`} className="input" value={draft[field.key] || ''} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))}><option value="">Todos</option>{field.options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select> : <input id={`filter-${field.key}`} className="input" type={field.type} value={draft[field.key] || ''} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} />}</div>)}
     </FilterPanel>}
     {detail && <section className="panel panel-pad mb-4"><div className="resource-editor-heading"><h2>Detalle</h2><button type="button" className="icon-button" aria-label="Cerrar detalle" onClick={() => setDetail(null)}><Icon name="close" size={16} /></button></div><dl className="grid gap-3 sm:grid-cols-2">{resource.columns.map(([key, label]) => <div key={key}><dt className="label">{label}</dt><dd>{renderCell(detail, key)}</dd></div>)}</dl>{isStudent && user.role === 'ADMIN' && detail.user && <Link className="text-link" to={`/users?edit=${detail.user.id}`}>Editar cuenta vinculada</Link>}</section>}
     <div className={`resource-body ${editor !== undefined ? 'has-editor' : ''} ${resourceKey === 'users' ? 'resource-body-users' : ''}`}>
       <section className="panel resource-list"><div className="resource-list-heading"><h2>Resultados</h2><span>{pagination ? `Mostrando ${rows.length} de ${pagination.total}` : `${rows.length} registros`}</span></div>
-        {loading ? <Spinner /> : rows.length === 0 ? <EmptyState message={emptyMessage} /> : <DataTable columns={resource.columns} rows={rows} renderCell={renderCell} renderActions={(row) => <><button type="button" className="text-link" onClick={() => showDetail(row)}>Ver</button>{canWrite && user.role !== 'DOCENTE' && <button type="button" className="text-link" onClick={() => { setEditor(row); setEditMode('data'); setError(''); setSuccess(''); }}>{resourceKey === 'users' ? 'Editar cuenta' : 'Editar'}</button>}{resourceKey === 'users' && row.id !== user.id && <button type="button" className="text-link" onClick={() => { setEditor(row); setEditMode('status'); setError(''); setSuccess(''); }}>Cambiar estado</button>}</>} />}
+        {loading ? <Spinner /> : rows.length === 0 ? <EmptyState message={emptyMessage} /> : <DataTable columns={resource.columns} rows={rows} renderCell={renderCell} renderActions={(row) => <><button type="button" className="text-link" onClick={() => showDetail(row)}>Ver</button>{canWrite && user.role !== 'DOCENTE' && <button type="button" className="text-link" onClick={() => { setEditor(row); setEditMode('data'); setError(''); setSuccess(''); }}>{resourceKey === 'users' ? 'Editar cuenta' : 'Editar'}</button>}{canWrite && resource.allowDelete && <button type="button" className="text-link text-red-700" onClick={() => { setDeleteTarget(row); setError(''); setSuccess(''); }}>Eliminar</button>}{resourceKey === 'users' && row.id !== user.id && <button type="button" className="text-link" onClick={() => { setEditor(row); setEditMode('status'); setError(''); setSuccess(''); }}>Cambiar estado</button>}</>} />}
         <Pager pagination={pagination} onPage={changePage} />
       </section>
       {editor !== undefined && <Editor key={`${resourceKey}-${editor?.id || 'new'}-${editMode}`} resource={resource} item={editor} mode={editMode} user={user} onClose={closeEditor} onSaved={saved} />}
     </div>
+    {deleteTarget && <ConfirmDialog title="Eliminar registro" message="¿Eliminar este registro? Esta acción no se puede deshacer." busy={deleting} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />}
   </div>;
 }

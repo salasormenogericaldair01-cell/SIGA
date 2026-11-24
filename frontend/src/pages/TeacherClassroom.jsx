@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { Notice, PageHeader, Pager, Spinner, StatusBadge } from '../components/Ui';
-import { assignmentLabel, attendance, dateOnly, person } from '../utils/format';
+import { Button, ConfirmDialog, Notice, PageHeader, Pager, Spinner, StatusBadge } from '../components/Ui';
+import { assignmentLabel, attendance, dateOnly, person, todayLimaISO } from '../utils/format';
 
 const kinds = {
   grades: { path: '/grade-records', title: 'Calificaciones', singular: 'calificación', empty: 'Aún no hay calificaciones registradas en esta asignación.', value: 'value', choices: [['AD', 'AD'], ['A', 'A'], ['B', 'B'], ['C', 'C']] },
@@ -10,8 +10,10 @@ const kinds = {
 
 export default function TeacherClassroom() {
   const { api } = useAuth();
+  const today = todayLimaISO();
   const [assignments, setAssignments] = useState([]);
   const [assignment, setAssignment] = useState(null);
+  const [assignmentFilter, setAssignmentFilter] = useState('active');
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [assignmentPagination, setAssignmentPagination] = useState(null);
   const [roster, setRoster] = useState([]);
@@ -21,24 +23,38 @@ export default function TeacherClassroom() {
   const [kind, setKind] = useState('grades');
   const [records, setRecords] = useState([]);
   const [recordPage, setRecordPage] = useState(1);
+  const [recordFilterTerm, setRecordFilterTerm] = useState('');
+  const [recordFilterDate, setRecordFilterDate] = useState('');
   const [recordPagination, setRecordPagination] = useState(null);
   const [enrollmentId, setEnrollmentId] = useState('');
   const [term, setTerm] = useState('1');
-  const [day, setDay] = useState('');
+  const [day, setDay] = useState(today);
   const [value, setValue] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkExisting, setBulkExisting] = useState({});
+  const [bulkDraft, setBulkDraft] = useState({});
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const config = kinds[kind];
+
   useEffect(() => {
     let live = true; setLoading(true);
-    api('/teaching-assignments', { params: { page: assignmentPage, limit: 20 } }).then((result) => {
+    const params = {
+      page: assignmentPage,
+      limit: 20,
+      ...(assignmentFilter === 'active' ? { isActive: 'true' } : assignmentFilter === 'inactive' ? { isActive: 'false' } : {}),
+    };
+    api('/teaching-assignments', { params }).then((result) => {
       if (live) { setAssignments(result.data); setAssignmentPagination(result.pagination); }
     }).catch((failure) => { if (live) setError(failure.message); }).finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [api, assignmentPage, revision]);
+  }, [api, assignmentFilter, assignmentPage, revision]);
+
   useEffect(() => {
     if (!assignment) return;
     let live = true; setRosterLoading(true);
@@ -48,27 +64,69 @@ export default function TeacherClassroom() {
       .finally(() => { if (live) setRosterLoading(false); });
     return () => { live = false; };
   }, [api, assignment, rosterPage, revision]);
+
   useEffect(() => {
     if (!assignment) return;
     let live = true; setLoading(true);
-    api(config.path, { params: { teachingAssignmentId: assignment.id, page: recordPage, limit: 20 } }).then((result) => {
+    const params = {
+      teachingAssignmentId: assignment.id,
+      page: recordPage,
+      limit: 20,
+      ...(kind === 'grades' && recordFilterTerm ? { term: recordFilterTerm } : {}),
+      ...(kind === 'attendance' && recordFilterDate ? { date: recordFilterDate } : {}),
+    };
+    api(config.path, { params }).then((result) => {
       if (live) { setRecords(result.data); setRecordPagination(result.pagination); }
     }).catch((failure) => { if (live) setError(failure.message); }).finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [api, assignment, config.path, recordPage, revision]);
+  }, [api, assignment, config.path, kind, recordFilterDate, recordFilterTerm, recordPage, revision]);
+
+  useEffect(() => {
+    if (!assignment || !bulkOpen || (kind === 'attendance' && !day)) return;
+    let live = true; setBulkLoading(true);
+    const params = {
+      teachingAssignmentId: assignment.id,
+      limit: 100,
+      page: 1,
+      ...(kind === 'grades' ? { term } : { date: day }),
+    };
+    api(config.path, { params }).then((result) => {
+      if (!live) return;
+      const byEnrollment = {};
+      const draft = {};
+      result.data.forEach((record) => {
+        byEnrollment[record.enrollmentId] = record;
+        draft[record.enrollmentId] = record[config.value];
+      });
+      setBulkExisting(byEnrollment);
+      setBulkDraft(draft);
+    }).catch((failure) => {
+      if (live) setError(failure.message);
+    }).finally(() => {
+      if (live) setBulkLoading(false);
+    });
+    return () => { live = false; };
+  }, [api, assignment, bulkOpen, config.path, config.value, day, kind, revision, term]);
+
   function changeAssignment(item) {
     setAssignment(item); setRosterPage(1); setRecordPage(1);
     setRoster([]); setRosterPagination(null); setEnrollmentId('');
     setRecords([]); setRecordPagination(null); setValue('');
+    setBulkExisting({}); setBulkDraft({}); setDeleteTarget(null);
+    setRecordFilterTerm(''); setRecordFilterDate('');
     setRosterLoading(Boolean(item)); setError(''); setSuccess('');
   }
   function changeRosterPage(next) {
     setRosterPage(next); setRoster([]); setRosterPagination(null);
-    setEnrollmentId(''); setValue(''); setRosterLoading(true);
+    setEnrollmentId(''); setValue(''); setBulkDraft({}); setRosterLoading(true);
   }
   function changeAssignmentPage(next) {
     setAssignmentPage(next); changeAssignment(null);
   }
+  function changeAssignmentFilter(next) {
+    setAssignmentFilter(next); setAssignmentPage(1); changeAssignment(null);
+  }
+
   async function save(event) {
     event.preventDefault(); setError(''); setSuccess('');
     if (!assignment?.isActive) { setError('Esta asignación está inactiva. Puedes consultar sus registros, pero no agregar nuevos.'); return; }
@@ -80,23 +138,150 @@ export default function TeacherClassroom() {
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
+
+  async function saveBulk() {
+    setError(''); setSuccess('');
+    if (!assignment?.isActive) return;
+    if (kind === 'attendance' && (!day || day > today)) {
+      setError('Selecciona una fecha válida hasta hoy.');
+      return;
+    }
+    const operations = [];
+    roster.forEach((item) => {
+      const nextVal = bulkDraft[item.id] || '';
+      const existing = bulkExisting[item.id];
+      if (!nextVal) return;
+      if (existing) {
+        if (nextVal !== existing[config.value]) {
+          operations.push(api(`${config.path}/${existing.id}`, { method: 'PATCH', body: { [config.value]: nextVal } }));
+        }
+      } else {
+        operations.push(api(config.path, {
+          method: 'POST',
+          body: {
+            teachingAssignmentId: assignment.id,
+            enrollmentId: item.id,
+            ...(kind === 'grades' ? { term: Number(term), value: nextVal } : { date: day, status: nextVal }),
+          },
+        }));
+      }
+    });
+    if (operations.length === 0) {
+      setError('No hay cambios nuevos por guardar en esta página.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await Promise.all(operations);
+      setSuccess(`Se guardaron ${operations.length} registro${operations.length === 1 ? '' : 's'}.`);
+      setRevision((n) => n + 1);
+    } catch (failure) {
+      setError(failure.message);
+      setRevision((n) => n + 1);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function correct(record, next) {
     if (!next || next === record[config.value]) return;
-    setError(''); setBusy(true);
+    setError(''); setSuccess(''); setBusy(true);
     try { await api(`${config.path}/${record.id}`, { method: 'PATCH', body: { [config.value]: next } }); setSuccess('Corrección guardada.'); setRevision((n) => n + 1); }
     catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setError(''); setSuccess(''); setBusy(true);
+    try {
+      await api(`${config.path}/${deleteTarget.id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      setSuccess('Registro eliminado.');
+      setRevision((n) => n + 1);
+    } catch (failure) {
+      setDeleteTarget(null);
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function markAllAttendance(status) {
+    const next = { ...bulkDraft };
+    roster.forEach((item) => { next[item.id] = status; });
+    setBulkDraft(next);
+  }
+
   return <div className="space-y-5"><PageHeader title="Mi aula" subtitle="Selecciona una asignación para consultar estudiantes y registrar calificaciones o asistencia." /><Notice message={error} /><Notice message={success} kind="success" />
-    <section className="panel"><h2 className="mb-3 text-xl font-bold">Mis asignaciones</h2>{loading && !assignment ? <Spinner /> : assignments.length === 0 ? <p>No tienes asignaciones en esta página.</p> : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <button key={item.id} className={`module-card text-left ${assignment?.id === item.id ? 'border-[#C2410C] bg-orange-50' : ''}`} onClick={() => changeAssignment(item)}><span className="module-copy"><strong>{assignmentLabel(item)}</strong><small>{item.isActive ? 'Activa' : 'Inactiva · solo consulta'}</small></span></button>)}</div>}<Pager pagination={assignmentPagination} onPage={changeAssignmentPage} /></section>
+    <section className="panel">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-bold">Mis asignaciones</h2>
+        <div className="flex items-center gap-2">
+          <label className="label !mb-0" htmlFor="assignment-status-filter">Mostrar</label>
+          <select id="assignment-status-filter" className="input max-w-44" value={assignmentFilter} onChange={(e) => changeAssignmentFilter(e.target.value)}>
+            <option value="active">Solo activas</option>
+            <option value="all">Todas</option>
+            <option value="inactive">Solo inactivas</option>
+          </select>
+        </div>
+      </div>
+      {loading && !assignment ? <Spinner /> : assignments.length === 0 ? <p>No tienes asignaciones en esta página.</p> : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <button key={item.id} className={`module-card text-left ${assignment?.id === item.id ? 'border-[#C2410C] bg-orange-50' : ''}`} onClick={() => changeAssignment(item)}><span className="module-copy"><strong>{assignmentLabel(item)}</strong><small>{item.isActive ? 'Activa' : 'Inactiva · solo consulta'}</small></span></button>)}</div>}
+      <Pager pagination={assignmentPagination} onPage={changeAssignmentPage} />
+    </section>
+
     {assignment && <><section className="panel"><h2 className="text-xl font-bold">{assignmentLabel(assignment)}</h2><p className="mt-2 text-sm text-slate-600">Periodo: {assignment.section?.academicPeriod?.name} · Docente: {person(assignment.teacher?.user)}</p></section>
       <section className="panel"><h2 className="mb-3 text-xl font-bold">Estudiantes matriculados</h2>{rosterLoading ? <Spinner /> : roster.length === 0 ? <p className="text-slate-600">No hay matrículas activas en esta página.</p> : <table className="data-table"><thead><tr><th>Código</th><th>Estudiante</th><th>Estado</th></tr></thead><tbody>{roster.map((item) => <tr key={item.id}><td data-label="Código">{item.student.studentCode}</td><td data-label="Estudiante">{person(item.student)}</td><td data-label="Estado"><StatusBadge value="ACTIVE" /></td></tr>)}</tbody></table>}<Pager pagination={rosterPagination} onPage={changeRosterPage} /></section>
-      <section className="panel space-y-4"><div className="flex flex-wrap gap-2">{Object.entries(kinds).map(([key, option]) => <button key={key} className={kind === key ? 'btn-primary' : 'btn-secondary'} onClick={() => { setKind(key); setRecordPage(1); setValue(''); }}>{option.title}</button>)}</div>
+
+      <section className="panel space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">{Object.entries(kinds).map(([key, option]) => <button key={key} className={kind === key ? 'btn-primary' : 'btn-secondary'} onClick={() => { setKind(key); setRecordPage(1); setValue(''); setBulkExisting({}); setBulkDraft({}); }}>{option.title}</button>)}</div>
+          {assignment.isActive && <Button variant={bulkOpen ? 'primary' : 'secondary'} onClick={() => setBulkOpen((open) => !open)}>{bulkOpen ? 'Ocultar registro grupal' : 'Registro grupal'}</Button>}
+        </div>
+
         <h2 className="text-xl font-bold">Registrar {config.singular}</h2>
-        {assignment.isActive ? <form onSubmit={save} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><label className="label" htmlFor="roster-student">Estudiante</label><select id="roster-student" className="input" value={enrollmentId} disabled={rosterLoading || busy} onChange={(e) => setEnrollmentId(e.target.value)}><option value="">Selecciona</option>{roster.map((item) => <option key={item.id} value={item.id}>{item.student.studentCode} · {person(item.student)}</option>)}</select></div>
-          {kind === 'grades' ? <div><label className="label" htmlFor="term">Bimestre</label><select id="term" className="input" value={term} onChange={(e) => setTerm(e.target.value)}>{[1, 2, 3, 4].map((number) => <option key={number} value={number}>{number}</option>)}</select></div> : <div><label className="label" htmlFor="attendance-day">Fecha</label><input id="attendance-day" className="input" type="date" value={day} onChange={(e) => setDay(e.target.value)} /></div>}
-          <div><label className="label" htmlFor="record-value">{kind === 'grades' ? 'Nota' : 'Estado'}</label><select id="record-value" className="input" value={value} onChange={(e) => setValue(e.target.value)}><option value="">Selecciona</option>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="flex items-end"><button className="btn-primary w-full" disabled={busy || rosterLoading || roster.length === 0}>{busy ? 'Guardando…' : 'Guardar'}</button></div></form> : <p className="text-slate-600">Esta asignación está inactiva. Puedes consultar sus registros, pero no agregar ni corregir información.</p>}
-        <h3 className="border-t pt-4 text-lg font-bold">Registros</h3>{loading ? <Spinner /> : records.length === 0 ? <p className="text-slate-600">{config.empty}</p> : <table className="data-table"><thead><tr><th>Estudiante</th><th>{kind === 'grades' ? 'Bimestre' : 'Fecha'}</th><th>{kind === 'grades' ? 'Nota' : 'Estado'}</th><th>Corregir</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td data-label="Estudiante">{person(record.enrollment?.student)}</td><td data-label={kind === 'grades' ? 'Bimestre' : 'Fecha'}>{kind === 'grades' ? record.term : dateOnly(record.date)}</td><td data-label={kind === 'grades' ? 'Nota' : 'Estado'}>{kind === 'grades' ? record.value : attendance[record.status]}</td><td data-label="Corregir"><select aria-label={`Corregir ${person(record.enrollment?.student)}`} className="input max-w-36" value={record[config.value]} disabled={busy || !assignment.isActive} onChange={(e) => correct(record, e.target.value)}>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></td></tr>)}</tbody></table>}<Pager pagination={recordPagination} onPage={setRecordPage} />
+        {assignment.isActive ? <>
+          <form onSubmit={save} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div><label className="label" htmlFor="roster-student">Estudiante</label><select id="roster-student" className="input" value={enrollmentId} disabled={rosterLoading || busy} onChange={(e) => setEnrollmentId(e.target.value)}><option value="">Selecciona</option>{roster.map((item) => <option key={item.id} value={item.id}>{item.student.studentCode} · {person(item.student)}</option>)}</select></div>
+            {kind === 'grades' ? <div><label className="label" htmlFor="term">Bimestre</label><select id="term" className="input" value={term} onChange={(e) => setTerm(e.target.value)}>{[1, 2, 3, 4].map((number) => <option key={number} value={number}>{number}</option>)}</select></div> : <div><label className="label" htmlFor="attendance-day">Fecha</label><input id="attendance-day" className="input" type="date" max={today} value={day} onChange={(e) => setDay(e.target.value)} /></div>}
+            <div><label className="label" htmlFor="record-value">{kind === 'grades' ? 'Nota' : 'Estado'}</label><select id="record-value" className="input" value={value} onChange={(e) => setValue(e.target.value)}><option value="">Selecciona</option>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+            <div className="flex items-end"><button className="btn-primary w-full" disabled={busy || rosterLoading || roster.length === 0}>{busy ? 'Guardando…' : 'Guardar'}</button></div>
+          </form>
+
+          {bulkOpen && <div className="border-t pt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-bold text-slate-800">Registro grupal para {kind === 'grades' ? `Bimestre ${term}` : `fecha ${day || 'sin definir'}`}</h3>
+              <div className="flex flex-wrap gap-2">
+                {kind === 'attendance' && <Button variant="secondary" disabled={busy || bulkLoading || roster.length === 0} onClick={() => markAllAttendance('PRESENT')}>Marcar todos Presente</Button>}
+                <Button disabled={busy || bulkLoading || roster.length === 0} onClick={saveBulk}>{busy ? 'Guardando…' : 'Guardar lote'}</Button>
+              </div>
+            </div>
+            {bulkLoading || rosterLoading ? <Spinner /> : roster.length === 0 ? <p className="text-slate-600">No hay estudiantes activos en esta página.</p> : <table className="data-table">
+              <thead><tr><th>Código</th><th>Estudiante</th><th>{kind === 'grades' ? 'Nota' : 'Estado'}</th></tr></thead>
+              <tbody>{roster.map((item) => <tr key={item.id}>
+                <td data-label="Código">{item.student.studentCode}</td>
+                <td data-label="Estudiante">{person(item.student)}</td>
+                <td data-label={kind === 'grades' ? 'Nota' : 'Estado'}>
+                  <select aria-label={`Lote ${person(item.student)}`} className="input max-w-44" value={bulkDraft[item.id] ?? ''} disabled={busy} onChange={(e) => setBulkDraft((current) => ({ ...current, [item.id]: e.target.value }))}>
+                    <option value="">Sin asignar</option>
+                    {config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  </select>
+                </td>
+              </tr>)}</tbody>
+            </table>}
+          </div>}
+        </> : <p className="text-slate-600">Esta asignación está inactiva. Puedes consultar sus registros, pero no agregar, corregir ni eliminar información.</p>}
+
+        <div className="border-t pt-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-lg font-bold">Registros</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            {kind === 'grades'
+              ? <><label className="label !mb-0" htmlFor="filter-record-term">Bimestre</label><select id="filter-record-term" className="input max-w-36" value={recordFilterTerm} onChange={(e) => { setRecordFilterTerm(e.target.value); setRecordPage(1); }}><option value="">Todos</option>{[1, 2, 3, 4].map((number) => <option key={number} value={number}>{number}</option>)}</select></>
+              : <><label className="label !mb-0" htmlFor="filter-record-date">Fecha</label><input id="filter-record-date" className="input max-w-44" type="date" value={recordFilterDate} onChange={(e) => { setRecordFilterDate(e.target.value); setRecordPage(1); }} />{recordFilterDate && <button type="button" className="text-link" onClick={() => { setRecordFilterDate(''); setRecordPage(1); }}>Limpiar</button>}</>}
+          </div>
+        </div>
+        {loading ? <Spinner /> : records.length === 0 ? <p className="text-slate-600">{config.empty}</p> : <table className="data-table"><thead><tr><th>Estudiante</th><th>{kind === 'grades' ? 'Bimestre' : 'Fecha'}</th><th>{kind === 'grades' ? 'Nota' : 'Estado'}</th><th>Acciones</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td data-label="Estudiante">{person(record.enrollment?.student)}</td><td data-label={kind === 'grades' ? 'Bimestre' : 'Fecha'}>{kind === 'grades' ? record.term : dateOnly(record.date)}</td><td data-label={kind === 'grades' ? 'Nota' : 'Estado'}>{kind === 'grades' ? record.value : attendance[record.status]}</td><td data-label="Acciones" className="row-actions"><select aria-label={`Corregir ${person(record.enrollment?.student)}`} className="input max-w-36" value={record[config.value]} disabled={busy || !assignment.isActive} onChange={(e) => correct(record, e.target.value)}>{config.choices.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>{assignment.isActive && <button type="button" className="text-link text-red-700" disabled={busy} onClick={() => setDeleteTarget(record)}>Eliminar</button>}</td></tr>)}</tbody></table>}<Pager pagination={recordPagination} onPage={setRecordPage} />
       </section></>}
+    {deleteTarget && <ConfirmDialog title="Eliminar registro" message="¿Eliminar este registro? Esta acción no se puede deshacer." busy={busy} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />}
   </div>;
 }

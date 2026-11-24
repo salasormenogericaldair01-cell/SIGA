@@ -68,13 +68,34 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [more, setMore] = useState(false);
+  const extraKey = JSON.stringify(field.extraParams || {});
+  const missingRequired = Boolean(field.requireParam && !field.extraParams?.[field.requireParam]);
   useEffect(() => {
+    setPage(1);
+  }, [extraKey]);
+  useEffect(() => {
+    if (missingRequired) {
+      setOptions([]);
+      setMore(false);
+      setLoading(false);
+      setError('');
+      return undefined;
+    }
     let active = true;
     setLoading(true); setError('');
     async function load() {
       if (field.resource === 'student-users' || field.resource === 'teacher-users') {
+        const targetRole = field.resource === 'teacher-users' ? 'DOCENTE' : 'ESTUDIANTE';
         const profilePath = field.resource === 'teacher-users' ? '/teachers' : '/students';
-        const usersResult = await api('/users');
+        const usersList = [];
+        let userPage = 1;
+        let userTotalPages = 1;
+        do {
+          const usersResult = await api('/users', { params: { role: targetRole, isActive: 'true', page: userPage, limit: 100 } });
+          usersList.push(...(usersResult.users || []));
+          userTotalPages = usersResult.pagination?.totalPages || 1;
+          userPage += 1;
+        } while (userPage <= userTotalPages);
         const profiles = [];
         let profilePage = 1;
         let totalPages = 1;
@@ -85,25 +106,37 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
           profilePage += 1;
         } while (profilePage <= totalPages);
         const used = new Set(profiles.map((item) => item.userId).filter(Boolean));
-        return { data: usersResult.users.filter((user) => user.isActive && user.role === (field.resource === 'teacher-users' ? 'DOCENTE' : 'ESTUDIANTE') && (!used.has(user.id) || user.id === value)), more: false };
+        return { data: usersList.filter((user) => user.isActive && user.role === targetRole && (!used.has(user.id) || user.id === value)), more: false };
+      }
+      if (field.resource === 'enrollments' && field.extraParams?.teachingAssignmentId && !field.filter) {
+        const result = await api(`/teaching-assignments/${field.extraParams.teachingAssignmentId}/enrollments`, {
+          params: { status: 'ACTIVE', page, limit: 100 },
+        });
+        return { data: result.data, more: Boolean(result.pagination && page < result.pagination.totalPages) };
       }
       const resource = resources[field.resource];
       const params = {
         ...(resource.paginated ? { page, limit: 100, ...(resource.search && search ? { search } : {}) } : {}),
-        ...(!field.filter && ['academic-periods', 'sections', 'grades', 'education-levels', 'courses', 'students', 'teachers'].includes(field.resource) ? { isActive: 'true' } : {}),
+        ...(!field.filter && ['academic-periods', 'sections', 'grades', 'education-levels', 'courses', 'students', 'teachers', 'teaching-assignments'].includes(field.resource) ? { isActive: 'true' } : {}),
+        ...(!field.filter && field.resource === 'enrollments' ? { status: 'ACTIVE' } : {}),
+        ...(field.extraParams || {}),
       };
       const result = await api(resource.path, { params });
       let data = listData(resource, result);
       if (field.resource === 'sections') {
-        const [grades, periods, levels] = await Promise.all([api('/grades'), api('/academic-periods'), api('/education-levels')]);
-        data = data.map((section) => ({ ...section,
-          grade: { ...grades.items.find((grade) => grade.id === section.gradeId), educationLevel: levels.items.find((level) => level.id === grades.items.find((grade) => grade.id === section.gradeId)?.educationLevelId) },
-          academicPeriod: periods.items.find((period) => period.id === section.academicPeriodId),
-        }));
+        if (data.some((section) => !section.grade || !section.academicPeriod || !section.grade.educationLevel)) {
+          const [grades, periods, levels] = await Promise.all([api('/grades'), api('/academic-periods'), api('/education-levels')]);
+          data = data.map((section) => ({ ...section,
+            grade: section.grade || { ...grades.items.find((grade) => grade.id === section.gradeId), educationLevel: levels.items.find((level) => level.id === grades.items.find((grade) => grade.id === section.gradeId)?.educationLevelId) },
+            academicPeriod: section.academicPeriod || periods.items.find((period) => period.id === section.academicPeriodId),
+          }));
+        }
         if (!field.filter) data = data.filter((section) => section.grade?.isActive !== false && section.grade?.educationLevel?.isActive !== false && section.academicPeriod?.isActive !== false);
       } else if (field.resource === 'grades') {
-        const levels = await api('/education-levels');
-        data = data.map((grade) => ({ ...grade, educationLevel: levels.items.find((level) => level.id === grade.educationLevelId) }));
+        if (data.some((grade) => !grade.educationLevel)) {
+          const levels = await api('/education-levels');
+          data = data.map((grade) => ({ ...grade, educationLevel: grade.educationLevel || levels.items.find((level) => level.id === grade.educationLevelId) }));
+        }
         if (!field.filter) data = data.filter((grade) => grade.educationLevel?.isActive !== false);
       }
       return { data, more: Boolean(result.pagination && page < result.pagination.totalPages) };
@@ -114,12 +147,12 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
       if (field.resource === 'academic-periods' && !field.filter && !value && result.data.length === 1) onChange(result.data[0].id);
     }).catch((e) => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [api, field.resource, page, search, value]);
+  }, [api, field.resource, field.filter, missingRequired, extraKey, page, search, value]);
   return <div className="space-y-2">
     {resources[field.resource]?.search && <input className="input" aria-label={`Buscar ${field.label.toLowerCase()}`} placeholder="Buscar opción" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />}
-    <select id={id} className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled || loading}>
-      <option value="">{loading ? 'Cargando opciones…' : field.filter ? 'Todos' : field.optional ? 'Sin cuenta vinculada' : 'Selecciona una opción'}</option>
-      {value && !options.some((option) => option.id === value) && <option value={value}>Selección actual</option>}
+    <select id={id} className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled || loading || missingRequired}>
+      <option value="">{missingRequired ? 'Selecciona primero una asignación' : loading ? 'Cargando opciones…' : field.filter ? 'Todos' : field.optional ? 'Sin cuenta vinculada' : 'Selecciona una opción'}</option>
+      {value && !options.some((option) => option.id === value) && <option value={value}>{field.currentLabel || 'Selección actual'}</option>}
       {options.map((option) => <option key={option.id} value={option.id}>{field.resource.endsWith('-users') ? `${option.firstName} ${option.lastName} · ${option.email}` : refLabel(field.resource, option)}</option>)}
     </select>
     {(page > 1 || more) && <div className="reference-pagination">
@@ -132,12 +165,14 @@ export function ReferenceField({ field, value, onChange, disabled, id }) {
 
 export function FormField({ field, value, onChange, error, disabled }) {
   const id = `field-${field.key}`;
+  const isDisabled = disabled || Boolean(field.disabled);
   return <div className="form-field">
     <label htmlFor={id} className="label" data-required={!field.optional && field.type !== 'checkbox' ? 'true' : undefined}>{field.label}</label>
-    {field.type === 'ref' ? <ReferenceField field={field} value={value} onChange={onChange} disabled={disabled} id={id} />
-      : field.type === 'choice' ? <select id={id} className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled}><option value="">Selecciona</option>{field.options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-        : field.type === 'checkbox' ? <select id={id} className="input" value={value ? 'true' : 'false'} onChange={(e) => onChange(e.target.value === 'true')} disabled={disabled}><option value="true">Activo</option><option value="false">Inactivo</option></select>
-          : <input id={id} className="input" type={field.type} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} autoComplete={field.type === 'password' ? 'new-password' : undefined} />}
+    {field.type === 'ref' ? <ReferenceField field={field} value={value} onChange={onChange} disabled={isDisabled} id={id} />
+      : field.type === 'choice' ? <select id={id} className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={isDisabled}><option value="">Selecciona</option>{field.options.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+        : field.type === 'checkbox' ? <select id={id} className="input" value={value ? 'true' : 'false'} onChange={(e) => onChange(e.target.value === 'true')} disabled={isDisabled}><option value="true">Activo</option><option value="false">Inactivo</option></select>
+          : <input id={id} className="input" type={field.type} max={field.max} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={isDisabled} autoComplete={field.type === 'password' ? 'new-password' : undefined} />}
+    {field.help && <p className="form-help">{field.help}</p>}
     {error && <p className="field-error" id={`${id}-error`}>{error}</p>}
   </div>;
 }

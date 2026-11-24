@@ -251,10 +251,13 @@ describe('sesión y navegación', () => {
     });
   });
 
-  it('docente no consulta catálogos administrativos para filtrar asignaciones', async () => {
+  it('docente no consulta catálogos administrativos para filtrar asignaciones y opera solo desde Mi aula', async () => {
     sessionStorage.setItem('siga_token', 'previo');
     mockApi((path) => path === '/api/auth/me' ? json(200, { user: teacher }) : json(200, { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }));
     render(<App />);
+    expect(await screen.findByText('Bienvenido, Ana')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Calificaciones' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Asistencia' })).not.toBeInTheDocument();
     fireEvent.click((await screen.findAllByRole('link', { name: 'Mi aula' }))[0]);
     expect(await screen.findByRole('heading', { name: 'Mis asignaciones' })).toBeInTheDocument();
     expect(global.fetch.mock.calls.every(([url]) => !/\/(users|students|teachers|sections|academic-periods)$/.test(new URL(url).pathname))).toBe(true);

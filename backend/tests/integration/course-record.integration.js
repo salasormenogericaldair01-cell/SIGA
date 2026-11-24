@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
 const prisma = require('../../src/config/prisma');
 const { createApp } = require('../../src/app');
-const { todayLimaISO } = require('../../src/validators/course-record.validator');
+const { todayLimaISO } = require('../../src/shared/pagination');
 
 const app = createApp();
 const ids = { users: [], teachers: [], students: [], levels: [], grades: [], periods: [], sections: [], enrollments: [], courses: [], assignments: [], gradeRecords: [], attendanceRecords: [] };
@@ -190,4 +190,13 @@ test('PostgreSQL real: cursos, asignaciones, notas, asistencia y alcance por rec
   await call('patch', `/api/teaching-assignments/${a.body.data.id}`, admin, { isActive: true }).expect(409);
   await call('patch', `/api/courses/${courseA.body.data.id}`, admin, { isActive: true }).expect(200);
   await call('patch', `/api/teaching-assignments/${a.body.data.id}`, admin, { isActive: true }).expect(200);
+
+  const byDate = await call('get', `/api/attendance-records?date=${date}`, teacherB).expect(200);
+  expect(byDate.body.data.some((item) => item.id === attA.body.data.id)).toBe(true);
+  const tempGrade = await call('post', '/api/grade-records', teacherB, { teachingAssignmentId: a.body.data.id, enrollmentId: enrollmentA.id, term: 3, value: 'B' }).expect(201);
+  await call('delete', `/api/grade-records/${tempGrade.body.data.id}`, secretary).expect(403);
+  await call('delete', `/api/grade-records/${tempGrade.body.data.id}`, studentA).expect(403);
+  await call('delete', `/api/grade-records/${tempGrade.body.data.id}`, teacherA).expect(403);
+  await call('delete', `/api/grade-records/${tempGrade.body.data.id}`, teacherB).expect(200);
+  await call('get', `/api/grade-records/${tempGrade.body.data.id}`, admin).expect(404);
 });
