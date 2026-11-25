@@ -1,15 +1,15 @@
-jest.mock('../../src/config/prisma', () => ({
-  $transaction: jest.fn(),
-  user: {
-    findUnique: jest.fn(),
+jest.mock('../../src/models', () => ({
+  sequelize: { transaction: jest.fn() },
+  User: {
+    findOne: jest.fn(),
+    findByPk: jest.fn(),
     create: jest.fn(),
-    findMany: jest.fn(),
-    count: jest.fn(),
+    findAll: jest.fn(),
+    findAndCountAll: jest.fn(),
     update: jest.fn(),
-    updateMany: jest.fn(),
   },
-  student: {
-    updateMany: jest.fn(),
+  Student: {
+    update: jest.fn(),
   },
 }));
 
@@ -17,7 +17,8 @@ const request = require('supertest');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const { Op } = require('sequelize');
+const { sequelize, User, Student } = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const secret = process.env.JWT_SECRET;
@@ -28,10 +29,28 @@ let admin;
 let docente;
 let estudiante;
 
-function selected(user, select) {
+let userInstanceUpdateSpy;
+
+function selected(user, attributes, attachUpdate = false) {
   if (!user) return null;
-  if (!select) return { ...user };
-  return Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, user[key]]));
+  const plain = !attributes
+    ? { ...user }
+    : Object.fromEntries(attributes.map((key) => [key, user[key]]));
+  if (attachUpdate) {
+    Object.defineProperty(plain, 'update', {
+      value: async (data) => {
+        userInstanceUpdateSpy(user.id, data);
+        if (data.email && [...users.values()].some((item) => item.id !== user.id && item.email === data.email)) {
+          throw Object.assign(new Error('unique constraint'), { name: 'SequelizeUniqueConstraintError' });
+        }
+        Object.assign(user, data);
+        Object.assign(plain, Object.fromEntries(Object.keys(plain).map((key) => [key, user[key]])));
+        return plain;
+      },
+      enumerable: false,
+    });
+  }
+  return plain;
 }
 
 function tokenFor(user, payload = {}) {
@@ -59,60 +78,66 @@ async function makeUser(role, email, isActive = true) {
 
 beforeEach(async () => {
   jest.clearAllMocks();
-  prisma.$transaction.mockImplementation((operation) => operation(prisma));
-  prisma.student.updateMany.mockResolvedValue({ count: 0 });
+  userInstanceUpdateSpy = jest.fn();
+  sequelize.transaction.mockImplementation((arg1, arg2) => (typeof arg1 === 'function' ? arg1({}) : arg2({})));
+  Student.update.mockResolvedValue([0]);
   users = new Map();
   admin = await makeUser('ADMIN', 'admin@colegio.edu.pe');
   docente = await makeUser('DOCENTE', 'docente@colegio.edu.pe');
   estudiante = await makeUser('ESTUDIANTE', 'estudiante@colegio.edu.pe');
   for (const user of [admin, docente, estudiante]) users.set(user.id, user);
 
-  prisma.user.findUnique.mockImplementation(async ({ where, select }) => {
-    const user = where.id ? users.get(where.id) : [...users.values()].find((item) => item.email === where.email);
-    return selected(user, select);
+  User.findOne.mockImplementation(async ({ where, attributes, raw }) => {
+    const user = [...users.values()].find((item) => item.email === where.email);
+    return selected(user, attributes, !raw);
+  });
+  User.findByPk.mockImplementation(async (id, { attributes, raw } = {}) => {
+    const user = users.get(id);
+    return selected(user, attributes, !raw);
   });
   const matches = (where = {}) => [...users.values()].filter((user) =>
     (where.role === undefined || user.role === where.role) &&
     (where.isActive === undefined || user.isActive === where.isActive) &&
-    (!where.OR || where.OR.some((part) => {
+    (!where[Op.or] || where[Op.or].some((part) => {
       const [field, predicate] = Object.entries(part)[0];
-      return user[field].toLowerCase().includes(predicate.contains.toLowerCase());
+      const needle = String(predicate[Op.iLike] || '').replace(/^%|%$/g, '').toLowerCase();
+      return user[field].toLowerCase().includes(needle);
     })));
-  prisma.user.count.mockImplementation(async ({ where }) => matches(where).length);
-  prisma.user.findMany.mockImplementation(async ({ select, where, skip = 0, take }) => {
+  User.findAll.mockImplementation(async ({ attributes, where, offset = 0, limit }) => {
     const found = matches(where);
-    return (take === undefined ? found.slice(skip) : found.slice(skip, skip + take)).map((user) => selected(user, select));
+    return (limit === undefined ? found.slice(offset) : found.slice(offset, offset + limit)).map((user) => selected(user, attributes));
   });
-  prisma.user.create.mockImplementation(async ({ data, select }) => {
+  User.findAndCountAll.mockImplementation(async ({ attributes, where, offset = 0, limit }) => {
+    const found = matches(where);
+    const slice = limit === undefined ? found.slice(offset) : found.slice(offset, offset + limit);
+    return { count: found.length, rows: slice.map((user) => selected(user, attributes)) };
+  });
+  User.create.mockImplementation(async (data) => {
     if ([...users.values()].some((user) => user.email === data.email)) {
-      throw Object.assign(new Error('unique constraint'), { code: 'P2002' });
+      throw Object.assign(new Error('unique constraint'), { name: 'SequelizeUniqueConstraintError' });
     }
     const user = { id: randomUUID(), tokenVersion: 0, ...data, isActive: true, createdAt: new Date(), updatedAt: new Date() };
     users.set(user.id, user);
-    return selected(user, select);
+    return selected(user);
   });
-  prisma.user.update.mockImplementation(async ({ where, data, select }) => {
+  User.update.mockImplementation(async (data, { where }) => {
     const user = users.get(where.id);
-    if (!user || (where.isActive && !user.isActive) || (where.tokenVersion !== undefined && where.tokenVersion !== user.tokenVersion)) {
-      throw Object.assign(new Error('missing'), { code: 'P2025' });
+    if (!user ||
+      (where.isActive !== undefined && user.isActive !== where.isActive) ||
+      (where.tokenVersion !== undefined && user.tokenVersion !== where.tokenVersion) ||
+      (where.passwordHash !== undefined && user.passwordHash !== where.passwordHash)) {
+      return [0];
     }
     if (data.email && [...users.values()].some((item) => item.id !== where.id && item.email === data.email)) {
-      throw Object.assign(new Error('unique constraint'), { code: 'P2002' });
+      throw Object.assign(new Error('unique constraint'), { name: 'SequelizeUniqueConstraintError' });
     }
     Object.assign(user, data);
-    return selected(user, select);
-  });
-  prisma.user.updateMany.mockImplementation(async ({ where, data }) => {
-    const user = users.get(where.id);
-    if (!user || user.passwordHash !== where.passwordHash || user.tokenVersion !== where.tokenVersion || !user.isActive) return { count: 0 };
-    user.passwordHash = data.passwordHash;
-    user.tokenVersion += data.tokenVersion.increment;
-    return { count: 1 };
+    return [1];
   });
   app = createApp();
 });
 
-describe('Autenticación (Prisma simulado)', () => {
+describe('Autenticación (Sequelize simulado)', () => {
   test('auth impide almacenar respuestas y no expone datos sensibles; health queda independiente', async () => {
     const login = await request(app).post('/api/auth/login')
       .send({ email: admin.email, password: validPassword }).expect(200);
@@ -174,10 +199,10 @@ describe('Autenticación (Prisma simulado)', () => {
     expect(current.passwordHash).toBe(originalHash);
     expect(current.tokenVersion).toBe(0);
     expect((await request(app).get('/api/auth/me').set(auth(current)).expect(200)).body.user.firstName).toBe('Nuevo');
-    expect(prisma.student.updateMany).toHaveBeenCalledWith({
-      where: { userId: current.id },
-      data: { firstName: 'Nuevo', lastName: 'Apellido' },
-    });
+    expect(Student.update).toHaveBeenCalledWith(
+      { firstName: 'Nuevo', lastName: 'Apellido' },
+      { where: { userId: current.id }, transaction: expect.any(Object) },
+    );
   });
 
   test('PATCH /auth/me exige sesión y rechaza cuerpos vacíos, nombres inválidos y campos protegidos', async () => {
@@ -187,7 +212,7 @@ describe('Autenticación (Prisma simulado)', () => {
       { tokenVersion: 2 }, { password: 'NuevaFraseSegura123' }, { isActive: false }]) {
       await request(app).patch('/api/auth/me').set(auth(docente)).send(body).expect(400);
     }
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(User.update).not.toHaveBeenCalled();
   });
 
   test('JWT inválido, vencido, sin expiración o con algoritmo distinto devuelve 401', async () => {
@@ -201,7 +226,7 @@ describe('Autenticación (Prisma simulado)', () => {
   });
 
   test('fallos de PostgreSQL no se confunden con credenciales inválidas', async () => {
-    prisma.user.findUnique.mockRejectedValueOnce(new Error('fallo de conexión'));
+    User.findByPk.mockRejectedValueOnce(new Error('fallo de conexión'));
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const response = await request(app).get('/api/auth/me').set(auth(admin)).expect(500);
@@ -216,7 +241,7 @@ describe('Autenticación (Prisma simulado)', () => {
     await request(app).post('/api/auth/change-password').set(auth(admin)).send({ currentPassword: validPassword, newPassword: 'corta' }).expect(400);
     await request(app).post('/api/auth/change-password').set(auth(admin)).send({ currentPassword: validPassword, newPassword: '🔒'.repeat(19) }).expect(400);
     await request(app).post('/api/auth/change-password').set(auth(admin)).send({ currentPassword: validPassword, newPassword: 'OtraFraseSegura123', userId: docente.id }).expect(400);
-    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(User.update).not.toHaveBeenCalled();
   });
 
   test('contraseña actual incorrecta no cambia el hash ni la versión', async () => {
@@ -225,7 +250,7 @@ describe('Autenticación (Prisma simulado)', () => {
       .send({ currentPassword: 'Incorrecta12345', newPassword: 'OtraFraseSegura123' }).expect(400);
     expect(admin.passwordHash).toBe(originalHash);
     expect(admin.tokenVersion).toBe(0);
-    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(User.update).not.toHaveBeenCalled();
   });
 
   test('cambio correcto revoca el token anterior y exige login con la nueva contraseña', async () => {
@@ -251,7 +276,7 @@ describe('Autenticación (Prisma simulado)', () => {
     ]);
     expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
     expect(admin.tokenVersion).toBe(1);
-    expect(prisma.user.updateMany).toHaveBeenCalledTimes(2);
+    expect(User.update).toHaveBeenCalledTimes(2);
   });
 
   test('limita los intentos de cambio de contraseña', async () => {
@@ -265,7 +290,7 @@ describe('Autenticación (Prisma simulado)', () => {
   });
 });
 
-describe('Usuarios y autorización (Prisma simulado)', () => {
+describe('Usuarios y autorización (Sequelize simulado)', () => {
   const newUser = {
     email: ' NUEVO@COLEGIO.EDU.PE ',
     password: validPassword,
@@ -305,7 +330,7 @@ describe('Usuarios y autorización (Prisma simulado)', () => {
   test('rechaza contraseña mayor de 72 bytes UTF-8 sin truncarla', async () => {
     const response = await request(app).post('/api/users').set(auth(admin)).send({ ...newUser, password: '🔒'.repeat(19) }).expect(400);
     expect(response.body).toEqual({ message: 'Datos inválidos' });
-    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(User.create).not.toHaveBeenCalled();
   });
 
   test('acepta 72 bytes exactos y conserva los espacios de la contraseña', async () => {
@@ -329,7 +354,7 @@ describe('Usuarios y autorización (Prisma simulado)', () => {
     await request(app).patch(`/api/users/${admin.id}/status`).set(auth(admin)).send({ isActive: false }).expect(400);
     await request(app).patch(`/api/users/${admin.id.toUpperCase()}/status`).set(auth(admin)).send({ isActive: false }).expect(400);
     expect(admin.isActive).toBe(true);
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(User.update).not.toHaveBeenCalled();
   });
 
   test('usuario inexistente devuelve 404', async () => {
@@ -374,10 +399,10 @@ describe('administración segura de cuentas', () => {
     await request(app).patch(`/api/users/${estudiante.id}`).set(auth(docente)).send({ firstName: 'Otro' }).expect(403);
     expect(estudiante.role).toBe('ESTUDIANTE');
     expect(estudiante.isActive).toBe(true);
-    expect(prisma.student.updateMany).toHaveBeenCalledWith({
-      where: { userId: estudiante.id },
-      data: { firstName: 'Elena', lastName: 'Torres' },
-    });
+    expect(Student.update).toHaveBeenCalledWith(
+      { firstName: 'Elena', lastName: 'Torres' },
+      { where: { userId: estudiante.id }, transaction: expect.any(Object) },
+    );
   });
 
   test('correo duplicado devuelve 409 y filtros conservan la paginación', async () => {

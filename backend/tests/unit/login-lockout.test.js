@@ -3,9 +3,9 @@ const bcrypt = require('bcrypt');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { MemoryStore } = require('express-rate-limit');
 
-jest.mock('../../src/config/prisma', () => ({ user: { findUnique: jest.fn() } }));
+jest.mock('../../src/models', () => ({ User: { findOne: jest.fn() } }));
 
-const prisma = require('../../src/config/prisma');
+const { User } = require('../../src/models');
 const env = require('../../src/config/env');
 const { createApp } = require('../../src/app');
 
@@ -47,7 +47,7 @@ beforeAll(async () => {
 beforeEach(() => {
   now = new Date('2026-10-12T12:00:00.000Z').getTime();
   dateSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
-  prisma.user.findUnique.mockImplementation(async ({ where }) => users.get(where.email) || null);
+  User.findOne.mockImplementation(async ({ where }) => users.get(where.email) || null);
   app = target(0);
 });
 afterEach(() => dateSpy.mockRestore());
@@ -60,17 +60,17 @@ test('bloqueo exacto, contraseña correcta rechazada durante toda la ventana y a
   const atLimit = await attempt(firstEmail, validPassword).expect(429);
   expect(atLimit.body).toEqual(blockedMessage);
   expect(Number(atLimit.headers['retry-after'])).toBe(900);
-  expect(prisma.user.findUnique).toHaveBeenCalledTimes(5);
+  expect(User.findOne).toHaveBeenCalledTimes(5);
   safeError(atLimit);
   now += 15 * 60 * 1000 - 1000;
   const beforeExpiry = await attempt(firstEmail, validPassword).expect(429);
   expect(Number(beforeExpiry.headers['retry-after'])).toBe(1);
-  expect(prisma.user.findUnique).toHaveBeenCalledTimes(5);
+  expect(User.findOne).toHaveBeenCalledTimes(5);
   safeError(beforeExpiry);
   now += 1001;
   const afterExpiry = await attempt(firstEmail, validPassword).expect(200);
   expect(afterExpiry.body.user.email).toBe(firstEmail);
-  expect(prisma.user.findUnique).toHaveBeenCalledTimes(6);
+  expect(User.findOne).toHaveBeenCalledTimes(6);
 });
 
 test('un login correcto ordinario no consume intentos fallidos', async () => {
@@ -90,7 +90,7 @@ test('29 fallos por IP aún pasan, el 30.º establece el bloqueo y el 31.º resp
   const blocked = await attempt(secondEmail, validPassword, `192.0.2.200, ${ip}`, proxyApp).expect(429);
   expect(blocked.body).toEqual(blockedMessage);
   expect(Number(blocked.headers['retry-after'])).toBe(900);
-  expect(prisma.user.findUnique).toHaveBeenCalledTimes(30);
+  expect(User.findOne).toHaveBeenCalledTimes(30);
   safeError(blocked);
   await attempt(secondEmail, validPassword, '192.0.2.200, 198.51.100.26', proxyApp).expect(200);
   now += 15 * 60 * 1000 - 1000;

@@ -1,35 +1,36 @@
-const prisma = require('../../config/prisma');
+const { Section, Grade, EducationLevel, AcademicPeriod } = require('../../models');
 const { missingAcademic, requireActiveAcademic } = require('../../shared/academic-helpers');
 
-const include = {
-  grade: {
-    select: {
-      id: true,
-      name: true,
-      order: true,
-      isActive: true,
-      educationLevel: { select: { id: true, code: true, name: true, isActive: true } },
-    },
+const include = [
+  {
+    model: Grade,
+    as: 'grade',
+    attributes: ['id', 'name', 'order', 'isActive'],
+    include: [{ model: EducationLevel, as: 'educationLevel', attributes: ['id', 'code', 'name', 'isActive'] }],
   },
-  academicPeriod: { select: { id: true, name: true, startDate: true, endDate: true, isActive: true } },
-};
+  {
+    model: AcademicPeriod,
+    as: 'academicPeriod',
+    attributes: ['id', 'name', 'startDate', 'endDate', 'isActive'],
+  },
+];
 
 async function list(filters) {
-  return prisma.section.findMany({
+  return Section.findAll({
     where: filters,
-    orderBy: [
-      { academicPeriod: { startDate: 'asc' } },
-      { grade: { educationLevel: { code: 'asc' } } },
-      { grade: { order: 'asc' } },
-      { name: 'asc' },
-      { id: 'asc' },
+    order: [
+      [{ model: AcademicPeriod, as: 'academicPeriod' }, 'startDate', 'ASC'],
+      [{ model: Grade, as: 'grade' }, { model: EducationLevel, as: 'educationLevel' }, 'code', 'ASC'],
+      [{ model: Grade, as: 'grade' }, 'order', 'ASC'],
+      ['name', 'ASC'],
+      ['id', 'ASC'],
     ],
     include,
   });
 }
 
 async function get(id) {
-  const record = await prisma.section.findUnique({ where: { id }, include });
+  const record = await Section.findByPk(id, { include });
   if (!record) throw missingAcademic('section');
   return record;
 }
@@ -38,12 +39,14 @@ async function create(data) {
   const grade = await requireActiveAcademic('grade', data.gradeId, 'Grado');
   await requireActiveAcademic('educationLevel', grade.educationLevelId, 'Nivel');
   await requireActiveAcademic('academicPeriod', data.academicPeriodId, 'Periodo');
-  return prisma.section.create({ data, include });
+  const created = await Section.create(data);
+  return get(created.id);
 }
 
 async function update(id, data) {
-  await get(id);
-  return prisma.section.update({ where: { id }, data, include });
+  const current = await get(id);
+  await current.update(data);
+  return get(id);
 }
 
 module.exports = { list, get, create, update };

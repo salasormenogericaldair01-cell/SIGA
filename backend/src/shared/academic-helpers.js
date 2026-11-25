@@ -1,11 +1,23 @@
-const prisma = require('../config/prisma');
+const models = require('../models');
 const { AppError } = require('./errors');
+
+const modelMap = {
+  educationLevel: models.EducationLevel,
+  grade: models.Grade,
+  academicPeriod: models.AcademicPeriod,
+  section: models.Section,
+};
 
 const missingAcademic = (resource) => new AppError(404, `${resource} no encontrado`);
 const invalidAcademic = (message) => new AppError(400, message);
 
-async function requireActiveAcademic(model, id, label) {
-  const record = await prisma[model].findUnique({ where: { id } });
+function toDateOnlyISO(value) {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+}
+
+async function requireActiveAcademic(modelKey, id, label) {
+  const Model = modelMap[modelKey];
+  const record = await Model.findByPk(id);
   if (!record) throw missingAcademic(label);
   if (!record.isActive) throw invalidAcademic(`${label} inactivo`);
   return record;
@@ -17,12 +29,15 @@ function assertGradeOrder(code, order) {
 }
 
 function assertPeriodDates(startDate, endDate) {
-  if (startDate >= endDate) throw invalidAcademic('La fecha inicial debe ser anterior a la final');
+  if (toDateOnlyISO(startDate) >= toDateOnlyISO(endDate)) {
+    throw invalidAcademic('La fecha inicial debe ser anterior a la final');
+  }
 }
 
 module.exports = {
   missingAcademic,
   invalidAcademic,
+  toDateOnlyISO,
   requireActiveAcademic,
   assertGradeOrder,
   assertPeriodDates,

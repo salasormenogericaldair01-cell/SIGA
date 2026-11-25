@@ -7,7 +7,7 @@ Sistema de Información de Gestión Académica (SIGA). Aplicación web fullstack
 | Capa       | Tecnología                                      |
 |------------|-------------------------------------------------|
 | Frontend   | React 18, React Router v7, Vite, Tailwind CSS   |
-| Backend    | Node.js, Express, Prisma ORM                    |
+| Backend    | Node.js, Express, Sequelize ORM (PostgreSQL)    |
 | Base datos | PostgreSQL                                      |
 | Tests FE   | Vitest + jsdom, Playwright (e2e)                |
 
@@ -16,12 +16,13 @@ Sistema de Información de Gestión Académica (SIGA). Aplicación web fullstack
 SIGA/
 ├── backend/
 │   ├── prisma/
-│   │   ├── schema.prisma          ← esquema completo
-│   │   └── migrations/            ← 5 migraciones (sprint1 → session_revocation)
+│   │   ├── schema.prisma          ← esquema SQL/relacional de referencia
+│   │   └── migrations/            ← 5 migraciones SQL (sprint1 → session_revocation)
 │   └── src/
 │       ├── app.js                 ← Express app factory
-│       ├── server.js
-│       ├── config/                ← env.js, prisma.js
+│       ├── server.js              ← valida conexión PostgreSQL con sequelize.authenticate()
+│       ├── config/                ← env.js, db.js (instancia Sequelize)
+│       ├── models/                ← index.js + 12 modelos Sequelize (*.js) y asociaciones
 │       ├── middlewares/           ← auth, error, not-found
 │       ├── routes/                ← index.js (router raíz bajo /api)
 │       ├── shared/                ← crud.js, errors.js, pagination.js, user-projection.js, academic-helpers.js, record-access.js, academic-records.js
@@ -125,7 +126,7 @@ Página genérica que consume la configuración de `resources.js` para renderiza
 - `module-error.js`: clase de error personalizada para respuestas estructuradas.
 - `resources.js` en frontend: configuración declarativa con helpers `field()`, `choice()`, `ref()`.
 - `displayValue()` y `refLabel()` en resources.js manejan la presentación de todos los valores.
-- Sincronización bidireccional `User` ↔ `Student`: actualizar `firstName`/`lastName` en `auth.service`, `user.service` o `profile.service` sincroniza el par vinculado dentro de `$transaction`.
+- Sincronización bidireccional `User` ↔ `Student`: actualizar `firstName`/`lastName` en `auth.service`, `users.service` o `students.service` sincroniza el par vinculado dentro de `sequelize.transaction(...)`.
 - Operación docente unificada en `TeacherClassroom.jsx` (`Mi aula`): filtro de asignaciones activas/inactivas, registro grupal en lote (POST/PATCH), filtro por bimestre/fecha y `DELETE` de registros erróneos.
 - `ReferenceField` soporta `extraParams`, `requireParam` (ej. `Asignación → Matrícula` en notas/asistencia y filtro por `academicPeriodId` en traslados de matrícula) y filtra activos por defecto.
 

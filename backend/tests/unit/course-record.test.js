@@ -1,18 +1,34 @@
-jest.mock('../../src/config/prisma', () => ({
-  user: { findUnique: jest.fn() },
-  teacher: { findUnique: jest.fn() }, student: { findUnique: jest.fn() },
-  course: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  teachingAssignment: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  enrollment: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
-  gradeRecord: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-  attendanceRecord: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-  $transaction: jest.fn(),
+jest.mock('../../src/models', () => ({
+  sequelize: { transaction: jest.fn() },
+  User: { findByPk: jest.fn() },
+  Teacher: { findOne: jest.fn(), findByPk: jest.fn() },
+  Student: { findOne: jest.fn() },
+  Course: { findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  TeachingAssignment: { findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  Enrollment: { findAndCountAll: jest.fn(), findByPk: jest.fn() },
+  GradeRecord: { findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  AttendanceRecord: { findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  Section: { findByPk: jest.fn() },
+  Grade: {},
+  EducationLevel: {},
+  AcademicPeriod: {},
 }));
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const {
+  sequelize,
+  User,
+  Teacher,
+  Student,
+  Course,
+  TeachingAssignment,
+  Enrollment,
+  GradeRecord,
+  AttendanceRecord,
+  Section,
+} = require('../../src/models');
 const { createApp } = require('../../src/app');
 const { todayLimaISO } = require('../../src/shared/pagination');
 const { respondError } = require('../../src/shared/errors');
@@ -35,14 +51,14 @@ const call = (method, path, role, body) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  prisma.user.findUnique.mockImplementation(async ({ where }) => Object.values(users).find((u) => u.id === where.id) || null);
-  prisma.teacher.findUnique.mockResolvedValue({ id: teacherId });
-  prisma.student.findUnique.mockResolvedValue({ id: studentId });
-  for (const model of [prisma.course, prisma.teachingAssignment, prisma.gradeRecord, prisma.attendanceRecord, prisma.enrollment]) {
-    model.count.mockResolvedValue(0);
-    model.findMany.mockResolvedValue([]);
+  User.findByPk.mockImplementation(async (id) => Object.values(users).find((u) => u.id === id) || null);
+  Teacher.findOne.mockResolvedValue({ id: teacherId });
+  Teacher.findByPk.mockResolvedValue({ id: teacherId, isActive: true, user: { id: users.DOCENTE.id, role: 'DOCENTE', isActive: true } });
+  Student.findOne.mockResolvedValue({ id: studentId });
+  for (const model of [Course, TeachingAssignment, GradeRecord, AttendanceRecord, Enrollment]) {
+    model.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
   }
-  prisma.$transaction.mockImplementation(async (fn) => fn(prisma));
+  sequelize.transaction.mockImplementation(async (arg1, arg2) => (typeof arg1 === 'function' ? arg1({}) : arg2({})));
 });
 
 test('permisos de catálogo, asignaciones y registros', async () => {
@@ -63,10 +79,10 @@ test('permisos de catálogo, asignaciones y registros', async () => {
 });
 
 test('DOCENTE sin perfil y ESTUDIANTE sin perfil reciben 403', async () => {
-  prisma.teacher.findUnique.mockResolvedValue(null);
+  Teacher.findOne.mockResolvedValue(null);
   await call('get', '/api/teaching-assignments', 'DOCENTE').expect(403);
   await call('get', '/api/grade-records', 'DOCENTE').expect(403);
-  prisma.student.findUnique.mockResolvedValue(null);
+  Student.findOne.mockResolvedValue(null);
   await call('get', '/api/grade-records', 'ESTUDIANTE').expect(403);
 });
 
@@ -85,27 +101,26 @@ test('filtros estrictos y paginación', async () => {
 
 test('DOCENTE y ESTUDIANTE tienen alcance aplicado en el conteo y la consulta', async () => {
   await call('get', `/api/teaching-assignments?teacherId=${otherTeacherId}`, 'DOCENTE').expect(200);
-  expect(prisma.teachingAssignment.count.mock.calls[0][0].where.AND).toEqual([{ teacherId: otherTeacherId }, { teacherId }]);
-  expect(prisma.teachingAssignment.findMany.mock.calls[0][0].where.AND[1].teacherId).toBe(teacherId);
+  expect(TeachingAssignment.findAndCountAll.mock.calls[0][0].where.teacherId).toBe(teacherId);
   await call('get', `/api/grade-records?enrollmentId=${enrollmentId}`, 'DOCENTE').expect(200);
-  const teacherWhere = prisma.gradeRecord.count.mock.calls[0][0].where;
-  expect(teacherWhere.AND[1].teachingAssignment.is.teacherId).toBe(teacherId);
+  const teacherInclude = GradeRecord.findAndCountAll.mock.calls[0][0].include.find((item) => item.as === 'teachingAssignment');
+  expect(teacherInclude.where.teacherId).toBe(teacherId);
   await call('get', `/api/attendance-records?teachingAssignmentId=${assignmentId}`, 'ESTUDIANTE').expect(200);
-  const studentWhere = prisma.attendanceRecord.count.mock.calls[0][0].where;
-  expect(studentWhere.AND[1].enrollment.is.studentId).toBe(studentId);
+  const studentInclude = AttendanceRecord.findAndCountAll.mock.calls[0][0].include.find((item) => item.as === 'enrollment');
+  expect(studentInclude.where.studentId).toBe(studentId);
 });
 
 test('IDs manipulados en detalle y PATCH se rechazan por recurso', async () => {
-  prisma.teachingAssignment.findUnique.mockResolvedValue({ id: assignmentId, teacherId: otherTeacherId, sectionId: randomUUID() });
+  TeachingAssignment.findByPk.mockResolvedValue({ id: assignmentId, teacherId: otherTeacherId, sectionId: randomUUID() });
   await call('get', `/api/teaching-assignments/${assignmentId}`, 'DOCENTE').expect(403);
   await call('get', `/api/teaching-assignments/${assignmentId}/enrollments`, 'DOCENTE').expect(403);
   const record = { id: randomUUID(), teachingAssignmentId: assignmentId, enrollmentId,
     teachingAssignment: { teacherId: otherTeacherId }, enrollment: { studentId: otherStudentId } };
-  prisma.gradeRecord.findUnique.mockResolvedValue(record);
+  GradeRecord.findByPk.mockResolvedValue(record);
   await call('get', `/api/grade-records/${record.id}`, 'DOCENTE').expect(403);
   await call('get', `/api/grade-records/${record.id}`, 'ESTUDIANTE').expect(403);
   await call('patch', `/api/grade-records/${record.id}`, 'DOCENTE', { value: 'A' }).expect(403);
-  prisma.attendanceRecord.findUnique.mockResolvedValue(record);
+  AttendanceRecord.findByPk.mockResolvedValue(record);
   await call('get', `/api/attendance-records/${record.id}`, 'ESTUDIANTE').expect(403);
 });
 
@@ -139,27 +154,27 @@ test('DELETE de notas y asistencia respeta permisos, alcance y estado activo; fi
   await call('delete', `/api/grade-records/${recordId}`, 'ESTUDIANTE').expect(403);
   await call('delete', '/api/grade-records/no-uuid', 'ADMIN').expect(400);
 
-  prisma.gradeRecord.findUnique.mockResolvedValue(null);
+  GradeRecord.findByPk.mockResolvedValue(null);
   await call('delete', `/api/grade-records/${recordId}`, 'ADMIN').expect(404);
 
-  prisma.gradeRecord.findUnique.mockResolvedValue({ id: recordId, teachingAssignmentId: assignmentId, enrollmentId });
-  prisma.teachingAssignment.findUnique.mockResolvedValue({ id: assignmentId, teacherId: otherTeacherId, sectionId, isActive: true });
+  const destroyMock = jest.fn().mockResolvedValue(undefined);
+  GradeRecord.findByPk.mockResolvedValue({ id: recordId, teachingAssignmentId: assignmentId, enrollmentId, term: 1, value: 'A', destroy: destroyMock });
+  TeachingAssignment.findByPk.mockResolvedValue({ id: assignmentId, teacherId: otherTeacherId, sectionId, isActive: true });
   await call('delete', `/api/grade-records/${recordId}`, 'DOCENTE').expect(403);
 
-  prisma.teachingAssignment.findUnique.mockResolvedValue({ id: assignmentId, teacherId, sectionId, isActive: true, courseId: randomUUID() });
-  prisma.enrollment.findUnique.mockResolvedValue({ id: enrollmentId, sectionId, status: 'ACTIVE', student: { id: studentId, isActive: true } });
-  prisma.course.findUnique.mockResolvedValue({ id: randomUUID(), isActive: true });
-  prisma.section = { findUnique: jest.fn().mockResolvedValue({
+  TeachingAssignment.findByPk.mockResolvedValue({ id: assignmentId, teacherId, sectionId, isActive: true, courseId: randomUUID() });
+  Enrollment.findByPk.mockResolvedValue({ id: enrollmentId, sectionId, status: 'ACTIVE', student: { id: studentId, isActive: true } });
+  Course.findByPk.mockResolvedValue({ id: randomUUID(), isActive: true });
+  Section.findByPk.mockResolvedValue({
     id: sectionId, isActive: true,
     grade: { isActive: true, educationLevel: { isActive: true } },
-    academicPeriod: { isActive: true, startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31') },
-  }) };
-  prisma.teacher.findUnique.mockResolvedValue({ id: teacherId, isActive: true, user: { id: users.DOCENTE.id, role: 'DOCENTE', isActive: true } });
-  prisma.gradeRecord.delete.mockResolvedValue({ id: recordId, term: 1, value: 'A' });
+    academicPeriod: { isActive: true, startDate: '2026-01-01', endDate: '2026-12-31' },
+  });
+  Teacher.findByPk.mockResolvedValue({ id: teacherId, isActive: true, user: { id: users.DOCENTE.id, role: 'DOCENTE', isActive: true } });
   await call('delete', `/api/grade-records/${recordId}`, 'DOCENTE').expect(200);
-  expect(prisma.gradeRecord.delete).toHaveBeenCalledWith(expect.objectContaining({ where: { id: recordId } }));
+  expect(destroyMock).toHaveBeenCalledWith({ transaction: expect.any(Object) });
 
   const filterDay = todayLimaISO();
   await call('get', `/api/attendance-records?date=${filterDay}`, 'ADMIN').expect(200);
-  expect(prisma.attendanceRecord.count.mock.calls[0][0].where.AND[0].date).toEqual(new Date(`${filterDay}T00:00:00.000Z`));
+  expect(AttendanceRecord.findAndCountAll.mock.calls[0][0].where.date).toBe(filterDay);
 });

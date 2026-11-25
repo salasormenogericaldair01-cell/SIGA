@@ -1,15 +1,14 @@
 const bcrypt = require('bcrypt');
-const prisma = require('../../config/prisma');
+const { Op } = require('sequelize');
 const env = require('../../config/env');
-const { adminUserSelect, adminUser } = require('../../shared/user-projection');
+const { sequelize, User, Student } = require('../../models');
+const { adminUserAttributes, adminUser } = require('../../shared/user-projection');
 
 async function createUser(data) {
   const { password, ...fields } = data;
   const passwordHash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
-  const user = await prisma.user.create({
-    data: { ...fields, passwordHash },
-    select: adminUserSelect,
-  });
+  const created = await User.create({ ...fields, passwordHash });
+  const user = await User.findByPk(created.id, { attributes: adminUserAttributes });
   return adminUser(user);
 }
 
@@ -17,56 +16,58 @@ async function listUsers({ search, role, isActive, page, limit } = {}) {
   const where = {
     ...(role ? { role } : {}),
     ...(isActive === undefined ? {} : { isActive }),
-    ...(search ? { OR: ['firstName', 'lastName', 'email'].map((field) => ({ [field]: { contains: search, mode: 'insensitive' } })) } : {}),
+    ...(search
+      ? { [Op.or]: ['firstName', 'lastName', 'email'].map((field) => ({ [field]: { [Op.iLike]: `%${search}%` } })) }
+      : {}),
   };
   const paginated = page !== undefined || limit !== undefined;
   const currentPage = page || 1;
   const pageSize = limit || 20;
   const query = {
     where,
-    select: adminUserSelect,
-    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-    ...(paginated ? { skip: (currentPage - 1) * pageSize, take: pageSize } : {}),
+    attributes: adminUserAttributes,
+    order: [['createdAt', 'DESC'], ['id', 'ASC']],
+    ...(paginated ? { offset: (currentPage - 1) * pageSize, limit: pageSize } : {}),
   };
-  if (!paginated) return { users: (await prisma.user.findMany(query)).map(adminUser) };
-  const [total, users] = await Promise.all([prisma.user.count({ where }), prisma.user.findMany(query)]);
+  if (!paginated) {
+    const rows = await User.findAll(query);
+    return { users: rows.map(adminUser) };
+  }
+  const { count, rows } = await User.findAndCountAll(query);
   return {
-    users: users.map(adminUser),
-    pagination: { page: currentPage, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) },
+    users: rows.map(adminUser),
+    pagination: { page: currentPage, limit: pageSize, total: count, totalPages: Math.ceil(count / pageSize) },
   };
 }
 
 async function getUser(id) {
-  const user = await prisma.user.findUnique({ where: { id }, select: adminUserSelect });
+  const user = await User.findByPk(id, { attributes: adminUserAttributes });
   return user ? adminUser(user) : null;
 }
 
 async function updateUser(id, data) {
-  return prisma.$transaction(async (db) => {
-    const user = await db.user.update({ where: { id }, data, select: adminUserSelect });
+  return sequelize.transaction(async (transaction) => {
+    const user = await User.findByPk(id, { attributes: adminUserAttributes, transaction });
+    if (!user) throw Object.assign(new Error('missing'), { code: 'P2025' });
+    await user.update(data, { transaction });
     if (data.firstName !== undefined || data.lastName !== undefined) {
-      await db.student.updateMany({
-        where: { userId: id },
-        data: {
+      await Student.update(
+        {
           ...(data.firstName !== undefined ? { firstName: data.firstName } : {}),
           ...(data.lastName !== undefined ? { lastName: data.lastName } : {}),
         },
-      });
+        { where: { userId: id }, transaction },
+      );
     }
     return adminUser(user);
   });
 }
 
 async function setStatus(id, isActive) {
-  const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  const user = await User.findByPk(id, { attributes: adminUserAttributes });
   if (!user) return null;
-
-  const updated = await prisma.user.update({
-    where: { id },
-    data: { isActive },
-    select: adminUserSelect,
-  });
-  return adminUser(updated);
+  await user.update({ isActive });
+  return adminUser(user);
 }
 
 module.exports = { createUser, listUsers, getUser, updateUser, setStatus };

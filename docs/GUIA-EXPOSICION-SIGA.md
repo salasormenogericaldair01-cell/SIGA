@@ -7,7 +7,7 @@ Guía paso a paso para entender y explicar **SIGA** de forma sencilla, conectand
 ## 1. Mapa en una frase
 - **Frontend (`frontend/src/`)**: Pantallas en **React** que muestran formularios y tablas según el rol del usuario.
 - **Backend (`backend/src/`)**: API en **Node.js + Express** organizada con **1 carpeta por tabla/recurso**, igual que un CRUD clásico.
-- **Base de datos (`PostgreSQL`)**: **12 tablas relacionales** creadas con SQL (`backend/prisma/migrations/*.sql`) y conectadas con Prisma (equivalente a Sequelize en clase).
+- **Base de datos (`PostgreSQL`)**: **12 tablas relacionales** en PostgreSQL conectadas con **Sequelize** (`backend/src/config/db.js` + `backend/src/models/*.js`).
 
 ---
 
@@ -15,18 +15,19 @@ Guía paso a paso para entender y explicar **SIGA** de forma sencilla, conectand
 
 ```text
 backend/src/
-├── server.js                      ← 1. Arranca el servidor HTTP (puerto 3000)
+├── server.js                      ← 1. Verifica PostgreSQL (sequelize.authenticate) y arranca en puerto 3000
 ├── app.js                         ← 2. Configura Express (CORS, Helmet, JSON, /api)
 ├── routes/index.js                ← 3. Índice de las 14 rutas del sistema
 ├── config/
 │   ├── env.js                     ← Variables .env validadas
-│   └── prisma.js                  ← Conexión a PostgreSQL (equivalente a db.js)
+│   └── db.js                      ← Conexión Sequelize a PostgreSQL (new Sequelize)
+├── models/                        ← 12 modelos Sequelize (*.js) + index.js con relaciones (belongsTo/hasMany)
 ├── middlewares/
 │   ├── auth.middleware.js         ← Verifica el token JWT y el rol del usuario
 │   └── error.middleware.js        ← Atrapa errores inesperados sin filtrar datos
 ├── shared/                        ← Código común para no repetir en cada módulo
 │   ├── crud.js                    ← Controlador CRUD estándar (list, get, create, update, remove)
-│   ├── errors.js                  ← Traduce errores de PostgreSQL/Prisma a HTTP (404, 409)
+│   ├── errors.js                  ← Traduce errores de PostgreSQL/Sequelize a HTTP (400, 404, 409)
 │   ├── pagination.js              ← Paginación, fecha Lima y validaciones base
 │   ├── user-projection.js         ← Oculta passwordHash y tokenVersion
 │   ├── academic-helpers.js        ← Reglas de grados y fechas de periodos
@@ -53,11 +54,11 @@ backend/src/
 1. **`*.routes.js`** → Qué URLs atiende (`GET`, `POST`, `PATCH`, `DELETE`) y qué roles pueden entrar.
 2. **`*.validator.js`** → Revisa que el JSON del formulario venga completo y válido antes de tocar la BD.
 3. **`*.controller.js`** → Recibe la petición HTTP y llama al servicio.
-4. **`*.service.js`** → Ejecuta las reglas de negocio y la consulta a PostgreSQL (`prisma.<tabla>.findMany`, `create`, `update`, `delete`).
+4. **`*.service.js`** → Ejecuta las reglas de negocio y la consulta a PostgreSQL con Sequelize (`Model.findAll`, `Model.findAndCountAll`, `Model.create`, `record.update`, `record.destroy`).
 
 ---
 
-## 3. Cómo explicar la Base de Datos en PostgreSQL (sin complicarse con Prisma)
+## 3. Cómo explicar la Base de Datos en PostgreSQL con Sequelize
 
 Si el profesor pregunta por las tablas y relaciones, muéstrale **pgAdmin 4** con estas ideas claras:
 

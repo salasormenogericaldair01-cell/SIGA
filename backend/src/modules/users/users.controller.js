@@ -1,4 +1,5 @@
 const { createUserSchema, updateUserSchema, listUsersSchema, statusSchema, idSchema } = require('./users.validator');
+const { isUniqueConstraintError } = require('../../shared/errors');
 const userService = require('./users.service');
 
 async function create(req, res) {
@@ -9,7 +10,7 @@ async function create(req, res) {
     const user = await userService.createUser(parsed.data);
     return res.status(201).json({ user });
   } catch (error) {
-    if (error.code === 'P2002') {
+    if (isUniqueConstraintError(error)) {
       return res.status(409).json({ message: 'El email ya está registrado' });
     }
     throw error;
@@ -37,7 +38,7 @@ async function update(req, res) {
   try {
     return res.json({ user: await userService.updateUser(id.data, body.data) });
   } catch (error) {
-    if (error.code === 'P2002') return res.status(409).json({ message: 'El email ya está registrado' });
+    if (isUniqueConstraintError(error)) return res.status(409).json({ message: 'El email ya está registrado' });
     if (error.code === 'P2025') return res.status(404).json({ message: 'Usuario no encontrado' });
     throw error;
   }

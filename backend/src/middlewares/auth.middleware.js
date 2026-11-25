@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
-const prisma = require('../config/prisma');
+const { User } = require('../models');
 const env = require('../config/env');
-const { publicUserSelect } = require('../shared/user-projection');
+const { publicUserAttributes } = require('../shared/user-projection');
 
 async function authenticate(req, res, next) {
   const match = /^Bearer (\S+)$/.exec(req.get('Authorization') || '');
@@ -19,19 +19,18 @@ async function authenticate(req, res, next) {
   }
 
   if (
-    typeof payload !== 'object' ||
-    !z.uuid().safeParse(payload.sub).success ||
-    !Number.isSafeInteger(payload.tokenVersion) || payload.tokenVersion < 0 ||
-    typeof payload.exp !== 'number' ||
-    payload.exp <= Math.floor(Date.now() / 1000)
+    typeof payload !== 'object'
+    || !z.uuid().safeParse(payload.sub).success
+    || !Number.isSafeInteger(payload.tokenVersion) || payload.tokenVersion < 0
+    || typeof payload.exp !== 'number'
+    || payload.exp <= Math.floor(Date.now() / 1000)
   ) {
     return res.status(401).json({ message: 'No autorizado' });
   }
 
-  // La base es la fuente actual del rol, estado y versión de sesión.
-  const user = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    select: { ...publicUserSelect, isActive: true, tokenVersion: true },
+  const user = await User.findByPk(payload.sub, {
+    attributes: [...publicUserAttributes, 'isActive', 'tokenVersion'],
+    raw: true,
   });
   if (!user || !user.isActive || user.tokenVersion !== payload.tokenVersion) {
     return res.status(401).json({ message: 'No autorizado' });

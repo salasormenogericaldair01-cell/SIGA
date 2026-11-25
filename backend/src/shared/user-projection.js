@@ -1,40 +1,40 @@
-const publicUserSelect = {
-  id: true,
-  email: true,
-  firstName: true,
-  lastName: true,
-  role: true,
-};
+const publicUserAttributes = ['id', 'email', 'firstName', 'lastName', 'role'];
 
-const adminUserSelect = {
-  ...publicUserSelect,
-  isActive: true,
-  createdAt: true,
-  updatedAt: true,
-};
+const adminUserAttributes = [
+  ...publicUserAttributes,
+  'isActive',
+  'createdAt',
+  'updatedAt',
+];
+
+function plain(record) {
+  return record && typeof record.get === 'function' ? record.get({ plain: true }) : record;
+}
 
 function publicUser(user) {
+  const row = plain(user);
   return {
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    role: user.role,
+    id: row.id,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    role: row.role,
   };
 }
 
 function adminUser(user) {
+  const row = plain(user);
   return {
-    ...publicUser(user),
-    isActive: user.isActive,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
+    ...publicUser(row),
+    isActive: row.isActive,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
 module.exports = {
-  publicUserSelect,
-  adminUserSelect,
+  publicUserAttributes,
+  adminUserAttributes,
   publicUser,
   adminUser,
 };

@@ -1,16 +1,29 @@
-jest.mock('../../src/config/prisma', () => ({
-  user: { findUnique: jest.fn(), update: jest.fn() },
-  student: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  teacher: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  enrollment: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  section: { findUnique: jest.fn() },
-  $transaction: jest.fn(),
+jest.mock('../../src/models', () => ({
+  sequelize: { transaction: jest.fn(), fn: jest.fn((name, col) => ({ fn: name, col })), col: jest.fn((name) => name) },
+  User: { findByPk: jest.fn(), update: jest.fn() },
+  Student: { findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  Teacher: { findAndCountAll: jest.fn(), findByPk: jest.fn(), create: jest.fn() },
+  Enrollment: { findAndCountAll: jest.fn(), findByPk: jest.fn(), findOne: jest.fn(), create: jest.fn() },
+  Section: { findByPk: jest.fn() },
+  Grade: {},
+  EducationLevel: {},
+  AcademicPeriod: {},
+  GradeRecord: { findAll: jest.fn(), count: jest.fn() },
+  AttendanceRecord: { findAll: jest.fn(), count: jest.fn() },
 }));
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const {
+  sequelize,
+  User,
+  Student,
+  Teacher,
+  Enrollment,
+  GradeRecord,
+  AttendanceRecord,
+} = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -25,12 +38,15 @@ const call = (method, path, role, body) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  prisma.user.findUnique.mockImplementation(async ({ where }) => Object.values(users).find((u) => u.id === where.id) || null);
-  for (const model of [prisma.student, prisma.teacher, prisma.enrollment]) {
-    model.count.mockResolvedValue(0);
-    model.findMany.mockResolvedValue([]);
+  User.findByPk.mockImplementation(async (id) => Object.values(users).find((u) => u.id === id) || null);
+  for (const model of [Student, Teacher, Enrollment]) {
+    model.findAndCountAll.mockResolvedValue({ count: 0, rows: [] });
   }
-  prisma.$transaction.mockImplementation(async (fn) => fn(prisma));
+  GradeRecord.findAll.mockResolvedValue([]);
+  AttendanceRecord.findAll.mockResolvedValue([]);
+  GradeRecord.count.mockResolvedValue(0);
+  AttendanceRecord.count.mockResolvedValue(0);
+  sequelize.transaction.mockImplementation(async (arg1, arg2) => (typeof arg1 === 'function' ? arg1({}) : arg2({})));
 });
 
 test('matriz de acceso: sin token 401; DOCENTE y ESTUDIANTE 403', async () => {
@@ -59,7 +75,7 @@ test('filtros y paginación estrictos; orden estable', async () => {
   await call('get', '/api/students?isActive=maybe', 'ADMIN').expect(400);
   await call('get', '/api/enrollments?studentId=bad', 'ADMIN').expect(400);
   await call('get', '/api/enrollments?status=UNKNOWN', 'ADMIN').expect(400);
-  expect(prisma.student.findMany.mock.calls.at(-1)[0].orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+  expect(Student.findAndCountAll.mock.calls.at(-1)[0].order).toEqual([['createdAt', 'ASC'], ['id', 'ASC']]);
 });
 
 test('estudiantes: códigos, fechas, UUID y PATCH estrictos', async () => {
@@ -86,16 +102,22 @@ test('docentes y matrículas: campos inesperados o inmutables se rechazan', asyn
 });
 
 test('listado de docentes consulta solo campos seguros de User', async () => {
-  prisma.teacher.count.mockResolvedValue(1);
-  prisma.teacher.findMany.mockResolvedValue([{ id: randomUUID(), userId: users.DOCENTE.id, user: {
-    id: users.DOCENTE.id, email: users.DOCENTE.email, firstName: 'Docente', lastName: 'Prueba', role: 'DOCENTE',
-  } }]);
+  Teacher.findAndCountAll.mockResolvedValue({
+    count: 1,
+    rows: [{
+      id: randomUUID(),
+      userId: users.DOCENTE.id,
+      user: {
+        id: users.DOCENTE.id, email: users.DOCENTE.email, firstName: 'Docente', lastName: 'Prueba', role: 'DOCENTE',
+      },
+    }],
+  });
   const result = await call('get', '/api/teachers?search=docente', 'ADMIN').expect(200);
   expect(result.body.pagination.total).toBe(1);
   expect(JSON.stringify(result.body)).not.toContain('passwordHash');
-  const select = prisma.teacher.findMany.mock.calls[0][0].include.user.select;
-  expect(select).not.toHaveProperty('passwordHash');
-  expect(select).not.toHaveProperty('password');
+  const userInclude = Teacher.findAndCountAll.mock.calls[0][0].include.find((item) => item.as === 'user');
+  expect(userInclude.attributes).not.toContain('passwordHash');
+  expect(userInclude.attributes).not.toContain('password');
 });
 
 test('matrículas: listado y detalle identifican desde Student sin cuenta y conservan permisos', async () => {
@@ -105,15 +127,15 @@ test('matrículas: listado y detalle identifican desde Student sin cuenta y cons
     student: { id: randomUUID(), studentCode: 'EST-2026-001', firstName: 'María Elena', lastName: 'Rojas Quispe' },
     section: { id: randomUUID(), name: 'A' }, academicPeriod: { id: randomUUID(), name: '2026' },
   };
-  prisma.enrollment.count.mockResolvedValue(1);
-  prisma.enrollment.findMany.mockResolvedValue([record]);
-  prisma.enrollment.findUnique.mockResolvedValue(record);
+  Enrollment.findAndCountAll.mockResolvedValue({ count: 1, rows: [record] });
+  Enrollment.findByPk.mockResolvedValue(record);
 
   const listed = await call('get', '/api/enrollments?page=1&limit=20', 'SECRETARIA').expect(200);
   const detail = await call('get', `/api/enrollments/${id}`, 'ADMIN').expect(200);
   expect(listed.body.data[0].student).toMatchObject({ firstName: 'María Elena', lastName: 'Rojas Quispe', studentCode: 'EST-2026-001' });
   expect(detail.body.data.student).toEqual(listed.body.data[0].student);
-  expect(prisma.enrollment.findMany.mock.calls[0][0].include.student.select).toEqual({ id: true, studentCode: true, firstName: true, lastName: true });
+  const studentInclude = Enrollment.findAndCountAll.mock.calls[0][0].include.find((item) => item.as === 'student');
+  expect(studentInclude.attributes).toEqual(['id', 'studentCode', 'firstName', 'lastName']);
   expect(JSON.stringify([listed.body, detail.body])).not.toContain('passwordHash');
   await call('get', `/api/enrollments/${id}`, 'DOCENTE').expect(403);
   await call('get', `/api/enrollments/${id}`, 'ESTUDIANTE').expect(403);
@@ -121,27 +143,37 @@ test('matrículas: listado y detalle identifican desde Student sin cuenta y cons
 
 test('crear o editar estudiante con userId sincroniza nombres en User', async () => {
   const studentId = randomUUID();
-  prisma.user.findUnique.mockImplementation(async ({ where }) => {
-    if (where.id === users.ESTUDIANTE.id) return users.ESTUDIANTE;
-    return Object.values(users).find((u) => u.id === where.id) || null;
+  const studentRecord = {
+    id: studentId,
+    studentCode: 'E-99',
+    firstName: 'Sofía',
+    lastName: 'Quispe',
+    userId: users.ESTUDIANTE.id,
+    update: jest.fn(async (data) => {
+      Object.assign(studentRecord, data);
+      return studentRecord;
+    }),
+  };
+  User.findByPk.mockImplementation(async (id) => {
+    if (id === users.ESTUDIANTE.id) return users.ESTUDIANTE;
+    return Object.values(users).find((u) => u.id === id) || null;
   });
-  prisma.user.update.mockResolvedValue({ ...users.ESTUDIANTE, firstName: 'Sofía', lastName: 'Quispe' });
-  prisma.student.create.mockResolvedValue({ id: studentId, studentCode: 'E-99', firstName: 'Sofía', lastName: 'Quispe', userId: users.ESTUDIANTE.id });
+  User.update.mockResolvedValue([1]);
+  Student.create.mockResolvedValue(studentRecord);
+  Student.findByPk.mockResolvedValue(studentRecord);
 
   await call('post', '/api/students', 'ADMIN', {
     studentCode: 'E-99', firstName: 'Sofía', lastName: 'Quispe', birthDate: '2014-02-10', userId: users.ESTUDIANTE.id,
   }).expect(201);
-  expect(prisma.user.update).toHaveBeenCalledWith({
-    where: { id: users.ESTUDIANTE.id },
-    data: { firstName: 'Sofía', lastName: 'Quispe' },
-  });
+  expect(User.update).toHaveBeenCalledWith(
+    { firstName: 'Sofía', lastName: 'Quispe' },
+    { where: { id: users.ESTUDIANTE.id }, transaction: expect.any(Object) },
+  );
 
-  prisma.user.update.mockClear();
-  prisma.student.findUnique.mockResolvedValue({ id: studentId, userId: users.ESTUDIANTE.id, firstName: 'Sofía', lastName: 'Quispe' });
-  prisma.student.update.mockResolvedValue({ id: studentId, firstName: 'Sofía Lucía', lastName: 'Quispe', userId: users.ESTUDIANTE.id });
+  User.update.mockClear();
   await call('patch', `/api/students/${studentId}`, 'ADMIN', { firstName: 'Sofía Lucía' }).expect(200);
-  expect(prisma.user.update).toHaveBeenCalledWith({
-    where: { id: users.ESTUDIANTE.id },
-    data: { firstName: 'Sofía Lucía', lastName: 'Quispe' },
-  });
+  expect(User.update).toHaveBeenCalledWith(
+    { firstName: 'Sofía Lucía', lastName: 'Quispe' },
+    { where: { id: users.ESTUDIANTE.id }, transaction: expect.any(Object) },
+  );
 });

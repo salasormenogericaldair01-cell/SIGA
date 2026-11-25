@@ -1,12 +1,12 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const prisma = require('../../config/prisma');
 const env = require('../../config/env');
-const { publicUser, publicUserSelect } = require('../../shared/user-projection');
+const { sequelize, User, Student } = require('../../models');
+const { publicUser, publicUserAttributes } = require('../../shared/user-projection');
 const { passwordSchema } = require('./auth.validator');
 
 async function login({ email, password }) {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await User.findOne({ where: { email } });
 
   if (!user || !user.isActive || !(await bcrypt.compare(password, user.passwordHash))) {
     return null;
@@ -22,41 +22,41 @@ async function login({ email, password }) {
 }
 
 async function changePassword(userId, tokenVersion, currentPassword, newPassword) {
-  // Releer el hash y usar una actualización condicional evita que dos cambios
-  // concurrentes acepten la misma contraseña anterior.
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { passwordHash: true, tokenVersion: true, isActive: true },
+  const user = await User.findByPk(userId, {
+    attributes: ['passwordHash', 'tokenVersion', 'isActive'],
+    raw: true,
   });
   if (!user || !user.isActive || user.tokenVersion !== tokenVersion) return 'stale-session';
   if (!(await bcrypt.compare(currentPassword, user.passwordHash))) return 'invalid-current';
 
   const password = passwordSchema.parse(newPassword);
   const passwordHash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
-  const result = await prisma.user.updateMany({
-    where: { id: userId, isActive: true, passwordHash: user.passwordHash, tokenVersion },
-    data: { passwordHash, tokenVersion: { increment: 1 } },
-  });
-  return result.count === 1 ? 'changed' : 'stale-session';
+  const [affectedCount] = await User.update(
+    { passwordHash, tokenVersion: tokenVersion + 1 },
+    { where: { id: userId, isActive: true, passwordHash: user.passwordHash, tokenVersion } },
+  );
+  return affectedCount === 1 ? 'changed' : 'stale-session';
 }
 
 async function updateProfile(userId, tokenVersion, fields) {
-  return prisma.$transaction(async (db) => {
-    const user = await db.user.update({
+  return sequelize.transaction(async (transaction) => {
+    const [affectedCount] = await User.update(fields, {
       where: { id: userId, isActive: true, tokenVersion },
-      data: fields,
-      select: publicUserSelect,
+      transaction,
     });
+    if (affectedCount !== 1) {
+      throw Object.assign(new Error('missing'), { code: 'P2025' });
+    }
     if (fields.firstName !== undefined || fields.lastName !== undefined) {
-      await db.student.updateMany({
-        where: { userId },
-        data: {
+      await Student.update(
+        {
           ...(fields.firstName !== undefined ? { firstName: fields.firstName } : {}),
           ...(fields.lastName !== undefined ? { lastName: fields.lastName } : {}),
         },
-      });
+        { where: { userId }, transaction },
+      );
     }
-    return user;
+    return User.findByPk(userId, { attributes: publicUserAttributes, raw: true, transaction });
   });
 }
 

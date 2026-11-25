@@ -1,6 +1,6 @@
 const { z } = require('zod');
 const bcrypt = require('bcrypt');
-const prisma = require('../../src/config/prisma');
+const { sequelize, User } = require('../../src/models');
 const env = require('../../src/config/env');
 const { createUserSchema } = require('../../src/modules/users/users.validator');
 
@@ -24,26 +24,23 @@ async function main() {
     role: 'ADMIN',
   });
 
-  const existing = await prisma.user.findUnique({ where: { email: data.email }, select: { id: true } });
+  const existing = await User.findOne({ where: { email: data.email }, attributes: ['id'], raw: true });
   if (existing) {
     console.log('El email ya existe; no se modificó la cuenta.');
     return;
   }
 
   try {
-    await prisma.user.create({
-      data: {
-        email: data.email,
-        passwordHash: await bcrypt.hash(data.password, env.BCRYPT_ROUNDS),
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: 'ADMIN',
-      },
-      select: { id: true },
+    await User.create({
+      email: data.email,
+      passwordHash: await bcrypt.hash(data.password, env.BCRYPT_ROUNDS),
+      firstName: data.firstName,
+      lastName: data.lastName,
+      role: 'ADMIN',
     });
     console.log('Primer ADMIN creado.');
   } catch (error) {
-    if (error.code === 'P2002') {
+    if (error.name === 'SequelizeUniqueConstraintError' || error?.parent?.code === '23505' || error.code === 'P2002') {
       console.log('El email ya existe; no se modificó la cuenta.');
       return;
     }
@@ -57,5 +54,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await sequelize.close();
   });

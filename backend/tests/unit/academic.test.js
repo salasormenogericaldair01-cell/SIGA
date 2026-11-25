@@ -1,19 +1,29 @@
-jest.mock('../../src/config/prisma', () => ({
-  $transaction: jest.fn(),
-  user: { findUnique: jest.fn() },
-  educationLevel: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  grade: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  academicPeriod: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  section: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  enrollment: { count: jest.fn() },
-  gradeRecord: { count: jest.fn() },
-  attendanceRecord: { count: jest.fn() },
+jest.mock('../../src/models', () => ({
+  sequelize: { transaction: jest.fn() },
+  User: { findByPk: jest.fn() },
+  EducationLevel: { findByPk: jest.fn(), findAll: jest.fn(), create: jest.fn() },
+  Grade: { findByPk: jest.fn(), findAll: jest.fn(), create: jest.fn() },
+  AcademicPeriod: { findByPk: jest.fn(), findAll: jest.fn(), create: jest.fn() },
+  Section: { findByPk: jest.fn(), findAll: jest.fn(), create: jest.fn() },
+  Enrollment: { count: jest.fn() },
+  GradeRecord: { count: jest.fn() },
+  AttendanceRecord: { count: jest.fn() },
 }));
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const {
+  sequelize,
+  User,
+  EducationLevel,
+  Grade,
+  AcademicPeriod,
+  Section,
+  Enrollment,
+  GradeRecord,
+  AttendanceRecord,
+} = require('../../src/models');
 const { createApp } = require('../../src/app');
 const { seedAcademic } = require('../../scripts/setup/seed-academic');
 
@@ -31,34 +41,47 @@ let level;
 let grade;
 let period;
 
+const models = {
+  educationLevel: EducationLevel,
+  grade: Grade,
+  academicPeriod: AcademicPeriod,
+  section: Section,
+};
+
+function attachUpdate(modelKey, record) {
+  Object.defineProperty(record, 'update', {
+    value: async (data) => {
+      Object.assign(record, data);
+      return record;
+    },
+    enumerable: false,
+    configurable: true,
+  });
+  return record;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
-  prisma.$transaction.mockImplementation((operation) => operation(prisma));
-  level = { id: id(), code: 'INICIAL', name: 'Inicial', isActive: true };
-  grade = { id: id(), educationLevelId: level.id, name: '3 años', order: 3, isActive: true };
-  period = { id: id(), name: '2026', startDate: new Date('2026-03-01'), endDate: new Date('2026-12-01'), isActive: true };
+  sequelize.transaction.mockImplementation((arg1, arg2) => (typeof arg1 === 'function' ? arg1({}) : arg2({})));
+  level = attachUpdate('educationLevel', { id: id(), code: 'INICIAL', name: 'Inicial', isActive: true });
+  grade = attachUpdate('grade', { id: id(), educationLevelId: level.id, name: '3 años', order: 3, isActive: true });
+  period = attachUpdate('academicPeriod', { id: id(), name: '2026', startDate: '2026-03-01', endDate: '2026-12-01', isActive: true });
   records = { educationLevel: new Map([[level.id, level]]), grade: new Map([[grade.id, grade]]), academicPeriod: new Map([[period.id, period]]), section: new Map() };
-  prisma.user.findUnique.mockImplementation(async ({ where }) => Object.values(users).find((u) => u.id === where.id) || null);
-  prisma.enrollment.count.mockResolvedValue(0);
-  prisma.gradeRecord.count.mockResolvedValue(0);
-  prisma.attendanceRecord.count.mockResolvedValue(0);
-  for (const model of Object.keys(records)) {
-    prisma[model].findUnique.mockImplementation(async ({ where }) => records[model].get(where.id) || null);
-    prisma[model].findMany.mockImplementation(async ({ where }) => [...records[model].values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v)));
-    prisma[model].create.mockImplementation(async ({ data }) => {
+  User.findByPk.mockImplementation(async (userId) => Object.values(users).find((u) => u.id === userId) || null);
+  Enrollment.count.mockResolvedValue(0);
+  GradeRecord.count.mockResolvedValue(0);
+  AttendanceRecord.count.mockResolvedValue(0);
+  for (const [model, Model] of Object.entries(models)) {
+    Model.findByPk.mockImplementation(async (recordId) => records[model].get(recordId) || null);
+    Model.findAll.mockImplementation(async ({ where = {} } = {}) => [...records[model].values()].filter((r) => Object.entries(where).every(([k, v]) => r[k] === v)));
+    Model.create.mockImplementation(async (data) => {
       const unique = model === 'educationLevel' ? (r) => r.code === data.code
         : model === 'grade' ? (r) => r.educationLevelId === data.educationLevelId && r.order === data.order
           : model === 'academicPeriod' ? (r) => r.name === data.name
-            : (r) => r.gradeId === data.gradeId && r.academicPeriodId === data.academicPeriodId && r.name === data.name;
-      if ([...records[model].values()].some(unique)) throw Object.assign(new Error('duplicate'), { code: 'P2002' });
-      const record = { id: id(), isActive: true, ...data };
+            : (r) => r.gradeId === data.gradeId && r.academicPeriodId === data.academicPeriodId && r.name.toLowerCase() === data.name.toLowerCase();
+      if ([...records[model].values()].some(unique)) throw Object.assign(new Error('duplicate'), { name: 'SequelizeUniqueConstraintError' });
+      const record = attachUpdate(model, { id: id(), isActive: true, ...data });
       records[model].set(record.id, record);
-      return record;
-    });
-    prisma[model].update.mockImplementation(async ({ where, data }) => {
-      const record = records[model].get(where.id);
-      if (!record) throw Object.assign(new Error('missing'), { code: 'P2025' });
-      Object.assign(record, data);
       return record;
     });
   }
@@ -136,26 +159,29 @@ test('Secundaria filtra por nivel y la consulta solicita orden académico establ
   records.grade.set(secondaryGrade.id, secondaryGrade);
   const filtered = await send('get', `/api/grades?educationLevelId=${secondary.id}`, 'ADMIN').expect(200);
   expect(filtered.body.items.map((item) => item.id)).toEqual([secondaryGrade.id]);
-  expect(prisma.grade.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+  expect(Grade.findAll).toHaveBeenLastCalledWith(expect.objectContaining({
     where: { educationLevelId: secondary.id },
-    orderBy: [{ educationLevel: { code: 'asc' } }, { order: 'asc' }, { id: 'asc' }],
+    order: [[{ model: EducationLevel, as: 'educationLevel' }, 'code', 'ASC'], ['order', 'ASC'], ['id', 'ASC']],
   }));
   await send('get', '/api/education-levels', 'ADMIN').expect(200);
-  expect(prisma.educationLevel.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ orderBy: [{ code: 'asc' }, { id: 'asc' }] }));
+  expect(EducationLevel.findAll).toHaveBeenLastCalledWith(expect.objectContaining({ order: [['code', 'ASC'], ['id', 'ASC']] }));
   await send('get', '/api/sections', 'ADMIN').expect(200);
-  expect(prisma.section.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
-    include: expect.objectContaining({ grade: expect.any(Object), academicPeriod: expect.any(Object) }),
+  expect(Section.findAll).toHaveBeenLastCalledWith(expect.objectContaining({
+    include: expect.arrayContaining([
+      expect.objectContaining({ model: Grade, as: 'grade' }),
+      expect.objectContaining({ model: AcademicPeriod, as: 'academicPeriod' }),
+    ]),
   }));
 });
 
 test('periodo con historial permite fechas compatibles y rechaza asistencias fuera del rango', async () => {
-  prisma.enrollment.count.mockResolvedValue(1);
-  prisma.gradeRecord.count.mockResolvedValue(1);
+  Enrollment.count.mockResolvedValue(1);
+  GradeRecord.count.mockResolvedValue(1);
   await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { endDate: '2026-11-01' }).expect(200);
-  expect(period.endDate.toISOString().slice(0, 10)).toBe('2026-11-01');
-  prisma.attendanceRecord.count.mockResolvedValue(1);
+  expect(String(period.endDate).slice(0, 10)).toBe('2026-11-01');
+  AttendanceRecord.count.mockResolvedValue(1);
   await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { startDate: '2026-07-01' }).expect(409);
-  expect(period.startDate.toISOString().slice(0, 10)).toBe('2026-03-01');
+  expect(String(period.startDate).slice(0, 10)).toBe('2026-03-01');
   await send('patch', `/api/academic-periods/${period.id}`, 'ADMIN', { isActive: false }).expect(200);
   await send('get', `/api/academic-periods/${period.id}`, 'SECRETARIA').expect(200);
   expect(period.isActive).toBe(false);
