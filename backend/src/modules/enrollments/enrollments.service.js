@@ -102,7 +102,7 @@ async function list({ studentId, sectionId, academicPeriodId, status, page, limi
   return paginated(data, count, page, limit);
 }
 
-async function get(id, transaction) {
+async function getWithTransaction(id, transaction) {
   const record = await Enrollment.findByPk(id, { include, ...(transaction ? { transaction } : {}) });
   if (!record) throw new AppError(404, 'Matrícula no encontrada');
   const [gradeRecords, attendanceRecords] = await Promise.all([
@@ -110,6 +110,10 @@ async function get(id, transaction) {
     AttendanceRecord.count({ where: { enrollmentId: id }, ...(transaction ? { transaction } : {}) }),
   ]);
   return { ...toPlain(record), _count: { gradeRecords, attendanceRecords } };
+}
+
+async function get(id) {
+  return getWithTransaction(id);
 }
 
 async function create({ studentId, sectionId }) {
@@ -125,7 +129,7 @@ async function create({ studentId, sectionId }) {
       { studentId, sectionId, academicPeriodId: section.academicPeriodId },
       { transaction },
     );
-    return get(created.id, transaction);
+    return getWithTransaction(created.id, transaction);
   });
 }
 
@@ -150,7 +154,7 @@ async function update(id, data) {
       }
     }
     await current.update(data, { transaction });
-    return get(id, transaction);
+    return getWithTransaction(id, transaction);
   });
 }
 
