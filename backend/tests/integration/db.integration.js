@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const { sequelize, User } = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -10,28 +10,26 @@ let admin;
 
 beforeAll(async () => {
   // Defensa adicional: jamás escribir en la base de desarrollo.
-  const rows = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await sequelize.query('SELECT current_database() AS name, inet_server_port() AS port');
   if (rows[0].name !== 'siga_test' || rows[0].port !== 5433) {
     throw new Error('Las pruebas de integración requieren siga_test en el puerto 5433');
   }
 
-  admin = await prisma.user.create({
-    data: {
-      email: `admin-${randomUUID()}@colegio.edu.pe`,
-      passwordHash: await bcrypt.hash('UnaFraseSegura123', 10),
-      firstName: 'Admin',
-      lastName: 'Prueba',
-      role: 'ADMIN',
-    },
+  admin = await User.create({
+    email: `admin-${randomUUID()}@colegio.edu.pe`,
+    passwordHash: await bcrypt.hash('UnaFraseSegura123', 10),
+    firstName: 'Admin',
+    lastName: 'Prueba',
+    role: 'ADMIN',
   });
   createdIds.push(admin.id);
 });
 
 afterAll(async () => {
   if (createdIds.length) {
-    await prisma.user.deleteMany({ where: { id: { in: createdIds } } });
+    await User.destroy({ where: { id: createdIds } });
   }
-  await prisma.$disconnect();
+  await sequelize.close();
 });
 
 test('login, creación, restricción única y revocación con PostgreSQL real', async () => {

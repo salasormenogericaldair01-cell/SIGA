@@ -32,32 +32,38 @@ function baseline() {
   }));
 }
 
-function fakePrepareDb() {
-  const state = { levels: baseline(), grades: [], users: [], periods: [], sections: [], courses: [], teachers: [], students: [], assignments: [], enrollments: [], gradeRecords: [], attendanceRecords: [] };
-  let next = 0;
-  const insert = (collection, data) => { const row = { id: `id-${++next}`, ...data }; state[collection].push(row); return row; };
-  const tx = {
-    user: { count: async () => state.users.length, create: async ({ data }) => insert('users', data) },
-    academicPeriod: { findUnique: async () => state.periods[0] || null, create: async ({ data }) => insert('periods', data) },
-    course: { count: async () => state.courses.length, create: async ({ data }) => insert('courses', data) },
-    student: { count: async () => state.students.length, create: async ({ data }) => insert('students', data) },
-    educationLevel: {
-      findMany: async () => state.levels,
-      update: async ({ where, data }) => { const row = state.levels.find((item) => item.id === where.id); Object.assign(row, data); return row; },
-      create: async ({ data }) => { const row = insert('levels', data); row.grades = []; return row; },
-    },
-    grade: {
-      update: async ({ where, data }) => { const row = state.levels.flatMap((item) => item.grades).find((item) => item.id === where.id); Object.assign(row, data); return row; },
-      create: async ({ data }) => { const row = insert('grades', data); state.levels.find((item) => item.id === data.educationLevelId).grades.push(row); return row; },
-    },
-    section: { create: async ({ data }) => insert('sections', data) },
-    teacher: { create: async ({ data }) => insert('teachers', data) },
-    teachingAssignment: { create: async ({ data }) => insert('assignments', data) },
-    enrollment: { create: async ({ data }) => insert('enrollments', data) },
-    gradeRecord: { create: async ({ data }) => insert('gradeRecords', data) },
-    attendanceRecord: { create: async ({ data }) => insert('attendanceRecords', data) },
+function withUpdate(row) {
+  row.update = async (data) => {
+    Object.assign(row, data);
+    return row;
   };
-  return { tx, state };
+  return row;
+}
+
+function fakePrepareDb() {
+  const state = { levels: baseline().map((l) => { l.grades.forEach(withUpdate); return withUpdate(l); }), grades: [], users: [], periods: [], sections: [], courses: [], teachers: [], students: [], assignments: [], enrollments: [], gradeRecords: [], attendanceRecords: [] };
+  let next = 0;
+  const insert = (collection, data) => { const row = withUpdate({ id: `id-${++next}`, ...data }); state[collection].push(row); return row; };
+  const db = {
+    User: { count: async () => state.users.length, create: async (data) => insert('users', data) },
+    AcademicPeriod: { findOne: async () => state.periods[0] || null, create: async (data) => insert('periods', data) },
+    Course: { count: async () => state.courses.length, create: async (data) => insert('courses', data) },
+    Student: { count: async () => state.students.length, create: async (data) => insert('students', data) },
+    EducationLevel: {
+      findAll: async () => state.levels,
+      create: async (data) => { const row = insert('levels', data); row.grades = []; return row; },
+    },
+    Grade: {
+      create: async (data) => { const row = insert('grades', data); state.levels.find((item) => item.id === data.educationLevelId).grades.push(row); return row; },
+    },
+    Section: { create: async (data) => insert('sections', data) },
+    Teacher: { create: async (data) => insert('teachers', data) },
+    TeachingAssignment: { create: async (data) => insert('assignments', data) },
+    Enrollment: { create: async (data) => insert('enrollments', data) },
+    GradeRecord: { create: async (data) => insert('gradeRecords', data) },
+    AttendanceRecord: { create: async (data) => insert('attendanceRecords', data) },
+  };
+  return { db, state };
 }
 
 test('rechaza bases, host, puerto y TLS incorrectos sin conectar', () => {
@@ -75,12 +81,12 @@ test('rechaza bases, host, puerto y TLS incorrectos sin conectar', () => {
 });
 
 test('consulta el nombre y puerto reales antes de permitir el destino', async () => {
-  const prisma = { $queryRaw: jest.fn().mockResolvedValue([{ name: 'siga_test', port: 5432 }]) };
-  await expect(verifyDatabase(prisma, target)).rejects.toThrow(/servidor PostgreSQL/);
-  prisma.$queryRaw.mockResolvedValue([{ name: 'siga_demo_egx3', port: 5433 }]);
-  await expect(verifyDatabase(prisma, target)).rejects.toThrow(/servidor PostgreSQL/);
-  prisma.$queryRaw.mockResolvedValue([{ name: 'siga_demo_egx3', port: 5432 }]);
-  await expect(verifyDatabase(prisma, target)).resolves.toMatchObject({ database: 'siga_demo_egx3' });
+  const db = { query: jest.fn().mockResolvedValue([[{ name: 'siga_test', port: 5432 }]]) };
+  await expect(verifyDatabase(db, target)).rejects.toThrow(/servidor PostgreSQL/);
+  db.query.mockResolvedValue([[{ name: 'siga_demo_egx3', port: 5433 }]]);
+  await expect(verifyDatabase(db, target)).rejects.toThrow(/servidor PostgreSQL/);
+  db.query.mockResolvedValue([[{ name: 'siga_demo_egx3', port: 5432 }]]);
+  await expect(verifyDatabase(db, target)).resolves.toMatchObject({ database: 'siga_demo_egx3' });
   expect(() => outsideRepository(path.resolve(__dirname, '../.env.backup.dump'))).toThrow(/fuera de Git/);
   expect(() => outsideRepository(path.resolve(__dirname, '../../.env.backup.dump'))).toThrow(/fuera de Git/);
   expect(outsideRepository(path.join(os.tmpdir(), 'siga-backup.dump'))).toBeTruthy();
@@ -96,11 +102,11 @@ test('rechaza respaldos dentro del checkout principal al ejecutar desde un workt
 });
 
 test('prepara catálogo y relaciones sin etiquetas visibles; repetir se detiene sin cambios', async () => {
-  const { tx, state } = fakePrepareDb();
+  const { db, state } = fakePrepareDb();
   const people = accounts();
   const hashes = Object.fromEntries(Object.keys(people).map((key) => [key, `hash-${key}`]));
   const beforeIds = state.levels.map((item) => [item.id, item.grades[0].id]);
-  const result = await prepare(tx, people, hashes);
+  const result = await prepare({}, people, hashes, db);
   expect(result.adminId).toBeTruthy();
   expect(state.levels.map((item) => [item.id, item.grades[0].id]).slice(0, 2)).toEqual(beforeIds);
   expect(state.levels).toHaveLength(3);
@@ -125,7 +131,7 @@ test('prepara catálogo y relaciones sin etiquetas visibles; repetir se detiene 
     ...state.courses.flatMap((item) => [item.code, item.name]),
   ]);
   const snapshot = JSON.stringify(state);
-  await expect(prepare(tx, people, hashes)).rejects.toThrow(/no se repite/);
+  await expect(prepare({}, people, hashes, db)).rejects.toThrow(/no se repite/);
   expect(JSON.stringify(state)).toBe(snapshot);
 });
 
@@ -137,7 +143,7 @@ test('la validación del grafo impide retirar relaciones ajenas', () => {
     ['ESTUDIANTE_A', 'estudiante-a', 'Estudiante A', 'ESTUDIANTE'], ['ESTUDIANTE_B', 'estudiante-b', 'Estudiante B', 'ESTUDIANTE'],
   ].map(([key, name, lastName, role]) => ({ id: name, email: legacy[key], firstName: 'Demo', lastName, role, isActive: true }));
   const graph = {
-    users, period: { id: 'period', name: 'DEMO 2026', startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31') },
+    users, period: { id: 'period', name: 'DEMO 2026', startDate: '2026-01-01', endDate: '2026-12-31' },
     students: ['A', 'B'].map((key) => ({ id: `student-${key}`, studentCode: `DEMO-EST-${key}`, firstName: 'Demo', lastName: `Estudiante ${key}`, userId: `estudiante-${key.toLowerCase()}`, isActive: true })),
     teachers: ['A', 'B'].map((key) => ({ id: `teacher-${key}`, userId: `docente-${key.toLowerCase()}` })),
     sections: ['A', 'B'].map((key) => ({ id: `section-${key}`, name: `DEMO-${key}`, academicPeriodId: 'period', grade: { order: 1, educationLevel: { code: key === 'A' ? 'PRIMARIA' : 'SECUNDARIA' } } })),
@@ -157,11 +163,11 @@ test('la validación del grafo impide retirar relaciones ajenas', () => {
 
 test('no retira al ADMIN anterior sin ADMIN nuevo y prueba API completa', async () => {
   const people = accounts();
-  const tx = { user: { findUnique: jest.fn().mockResolvedValue(null) } };
-  await expect(retire(tx, people, {}, previousAccounts())).rejects.toThrow(/ADMIN/);
-  expect(tx.user.findUnique).toHaveBeenCalledTimes(1);
-  tx.user.findUnique.mockResolvedValue({ id: 'new-admin', role: 'ADMIN', isActive: true });
-  await expect(retire(tx, people, {}, previousAccounts())).rejects.toThrow(/Comprobación API/);
+  const db = { User: { findOne: jest.fn().mockResolvedValue(null) } };
+  await expect(retire({}, people, {}, previousAccounts(), db)).rejects.toThrow(/ADMIN/);
+  expect(db.User.findOne).toHaveBeenCalledTimes(1);
+  db.User.findOne.mockResolvedValue({ id: 'new-admin', role: 'ADMIN', isActive: true });
+  await expect(retire({}, people, {}, previousAccounts(), db)).rejects.toThrow(/Comprobación API/);
   const now = new Date().toISOString();
   const proof = { database: 'siga_demo_egx3', verifiedAt: now, roles: Object.fromEntries(Object.entries(people).map(([key, item]) => [key, { id: key === 'ADMIN' ? 'new-admin' : key, role: ROLES[key][2], emailSha256: emailDigest(item.email), verifiedAt: now }])) };
   expect(() => checkAccessProof(proof, Object.fromEntries(Object.entries(people).map(([key, item]) => [key, emailDigest(item.email)])), 'new-admin')).not.toThrow();
@@ -173,15 +179,15 @@ test('retire repetido se detiene si los registros anteriores ya no existen', asy
   const people = accounts();
   const now = new Date().toISOString();
   const proof = { database: 'siga_demo_egx3', verifiedAt: now, roles: Object.fromEntries(Object.entries(people).map(([key, item]) => [key, { id: key === 'ADMIN' ? 'new-admin' : key, role: ROLES[key][2], emailSha256: emailDigest(item.email), verifiedAt: now }])) };
-  const noRows = { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() };
-  const tx = {
-    user: { ...noRows, findUnique: jest.fn().mockResolvedValue({ id: 'new-admin', role: 'ADMIN', isActive: true }) },
-    student: noRows, teacher: noRows, academicPeriod: { findUnique: jest.fn().mockResolvedValue(null), deleteMany: jest.fn() },
-    section: noRows, course: noRows, teachingAssignment: noRows, enrollment: noRows,
-    gradeRecord: noRows, attendanceRecord: noRows,
+  const noRows = { findAll: jest.fn().mockResolvedValue([]), destroy: jest.fn() };
+  const db = {
+    User: { ...noRows, findOne: jest.fn().mockResolvedValue({ id: 'new-admin', role: 'ADMIN', isActive: true }) },
+    Student: noRows, Teacher: noRows, AcademicPeriod: { findOne: jest.fn().mockResolvedValue(null), destroy: jest.fn() },
+    Section: noRows, Course: noRows, TeachingAssignment: noRows, Enrollment: noRows,
+    GradeRecord: noRows, AttendanceRecord: noRows,
   };
-  await expect(retire(tx, people, proof, previousAccounts())).rejects.toThrow(/conjunto DEMO cambió/);
-  expect(noRows.deleteMany).not.toHaveBeenCalled();
+  await expect(retire({}, people, proof, previousAccounts(), db)).rejects.toThrow(/conjunto DEMO cambió/);
+  expect(noRows.destroy).not.toHaveBeenCalled();
 });
 
 test('rechaza etiquetas prohibidas también en correos nuevos', () => {

@@ -15,11 +15,11 @@ Crea un **Web Service** del mismo repositorio, con estos campos:
 | Root Directory | `backend` |
 | Runtime | `Node` |
 | Node version | 24.x; fija `NODE_VERSION` a una versión 24 disponible si Render selecciona otra |
-| Build Command | `npm ci --include=dev && npm run prisma:generate && npm run verify:database-target && npm run prisma:migrate` |
+| Build Command | `npm ci && npm run verify:database-target && npm run db:migrate` |
 | Start Command | `npm start` |
 | Health Check Path | `/api/health` |
 
-El build instala Prisma CLI, genera el cliente, **comprueba el destino** y aplica las migraciones existentes con `prisma migrate deploy`. Este último comando es idempotente, pero requiere acceso a la base durante el build. No se ejecuta ningún seed al construir o arrancar. El alias anterior `verify:demo-target` se conserva para configuraciones de Render que aún lo invoquen. En planes que incluyan *Pre-Deploy Command*, puedes mover `npm run verify:database-target && npm run prisma:migrate` a ese campo y dejar `npm ci --include=dev && npm run prisma:generate` como build; Render indica que el pre-deploy no está disponible para el Web Service gratuito. [Fases de despliegue de Render](https://render.com/docs/deploys).
+El build instala las dependencias, **comprueba el destino** y aplica las migraciones SQL pendientes de `backend/database/migrations/` con `npm run db:migrate`. Este último comando es idempotente, pero requiere acceso a la base durante el build. No se ejecuta ningún seed al construir o arrancar. El alias anterior `verify:demo-target` se conserva para configuraciones de Render que aún lo invoquen. En planes que incluyan *Pre-Deploy Command*, puedes mover `npm run verify:database-target && npm run db:migrate` a ese campo y dejar `npm ci` como build; Render indica que el pre-deploy no está disponible para el Web Service gratuito. [Fases de despliegue de Render](https://render.com/docs/deploys).
 
 Configura estas variables en **Environment** del servicio web:
 

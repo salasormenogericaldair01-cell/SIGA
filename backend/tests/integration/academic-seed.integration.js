@@ -1,31 +1,42 @@
-const prisma = require('../../src/config/prisma');
+const { sequelize, EducationLevel, Grade, User } = require('../../src/models');
 const { seedAcademic, levels } = require('../../scripts/setup/seed-academic');
 
 test('seed académico en siga_test: dos ejecuciones conservan cambios, usuarios y no duplican', async () => {
   const url = new URL(process.env.DATABASE_URL);
-  const target = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [target] = await sequelize.query('SELECT current_database() AS name, inet_server_port() AS port');
   if (target[0].name !== 'siga_test' || target[0].port !== 5433 ||
       !['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/siga_test') {
     throw new Error('La prueba del seed requiere siga_test en localhost:5433');
   }
 
-  const usersBefore = await prisma.user.findMany({ select: { id: true, email: true, role: true, isActive: true }, orderBy: { id: 'asc' } });
+  const usersBefore = await User.findAll({ attributes: ['id', 'email', 'role', 'isActive'], order: [['id', 'ASC']], raw: true });
   const rollback = new Error('rollback de datos temporales del seed');
   try {
-    await prisma.$transaction(async (tx) => {
-      const existing = await tx.educationLevel.findUnique({ where: { code: 'INICIAL' } });
+    await sequelize.transaction(async (transaction) => {
+      const existing = await EducationLevel.findOne({ where: { code: 'INICIAL' }, transaction });
       const level = existing
-        ? await tx.educationLevel.update({ where: { id: existing.id }, data: { name: 'Inicial editado', isActive: false } })
-        : await tx.educationLevel.create({ data: { code: 'INICIAL', name: 'Inicial editado', isActive: false } });
-      const grade = await tx.grade.upsert({
-        where: { educationLevelId_order: { educationLevelId: level.id, order: 3 } },
-        create: { educationLevelId: level.id, order: 3, name: 'Tres editado', isActive: false },
-        update: { name: 'Tres editado', isActive: false },
-      });
+        ? await existing.update({ name: 'Inicial editado', isActive: false }, { transaction })
+        : await EducationLevel.create({ code: 'INICIAL', name: 'Inicial editado', isActive: false }, { transaction });
 
-      await seedAcademic(tx);
-      const firstLevels = await tx.educationLevel.findMany({ orderBy: { code: 'asc' } });
-      const firstGrades = await tx.grade.findMany({ orderBy: [{ educationLevelId: 'asc' }, { order: 'asc' }] });
+      const [grade, createdGrade] = await Grade.findOrCreate({
+        where: { educationLevelId: level.id, order: 3 },
+        defaults: { educationLevelId: level.id, order: 3, name: 'Tres editado', isActive: false },
+        transaction,
+      });
+      if (!createdGrade) await grade.update({ name: 'Tres editado', isActive: false }, { transaction });
+
+      const txDb = {
+        EducationLevel: {
+          findOrCreate: (opts) => EducationLevel.findOrCreate({ ...opts, transaction }),
+        },
+        Grade: {
+          findOrCreate: (opts) => Grade.findOrCreate({ ...opts, transaction }),
+        },
+      };
+
+      await seedAcademic(txDb);
+      const firstLevels = await EducationLevel.findAll({ order: [['code', 'ASC']], raw: true, transaction });
+      const firstGrades = await Grade.findAll({ order: [['educationLevelId', 'ASC'], ['order', 'ASC']], raw: true, transaction });
       expect(firstLevels).toHaveLength(3);
       for (const entry of levels) {
         const current = firstLevels.find((item) => item.code === entry.code);
@@ -35,18 +46,18 @@ test('seed académico en siga_test: dos ejecuciones conservan cambios, usuarios 
         }
       }
 
-      await seedAcademic(tx);
-      expect(await tx.educationLevel.findMany({ orderBy: { code: 'asc' } })).toEqual(firstLevels);
-      expect(await tx.grade.findMany({ orderBy: [{ educationLevelId: 'asc' }, { order: 'asc' }] })).toEqual(firstGrades);
-      expect(await tx.educationLevel.findUnique({ where: { id: level.id } })).toMatchObject({ name: 'Inicial editado', isActive: false });
-      expect(await tx.grade.findUnique({ where: { id: grade.id } })).toMatchObject({ name: 'Tres editado', isActive: false });
-      expect(await tx.user.findMany({ select: { id: true, email: true, role: true, isActive: true }, orderBy: { id: 'asc' } })).toEqual(usersBefore);
+      await seedAcademic(txDb);
+      expect(await EducationLevel.findAll({ order: [['code', 'ASC']], raw: true, transaction })).toEqual(firstLevels);
+      expect(await Grade.findAll({ order: [['educationLevelId', 'ASC'], ['order', 'ASC']], raw: true, transaction })).toEqual(firstGrades);
+      expect(await EducationLevel.findByPk(level.id, { raw: true, transaction })).toMatchObject({ name: 'Inicial editado', isActive: false });
+      expect(await Grade.findByPk(grade.id, { raw: true, transaction })).toMatchObject({ name: 'Tres editado', isActive: false });
+      expect(await User.findAll({ attributes: ['id', 'email', 'role', 'isActive'], order: [['id', 'ASC']], raw: true, transaction })).toEqual(usersBefore);
       throw rollback;
-    }, { timeout: 20000 });
+    });
   } catch (error) {
     if (error !== rollback) throw error;
   } finally {
-    expect(await prisma.user.findMany({ select: { id: true, email: true, role: true, isActive: true }, orderBy: { id: 'asc' } })).toEqual(usersBefore);
-    await prisma.$disconnect();
+    expect(await User.findAll({ attributes: ['id', 'email', 'role', 'isActive'], order: [['id', 'ASC']], raw: true })).toEqual(usersBefore);
+    await sequelize.close();
   }
 });

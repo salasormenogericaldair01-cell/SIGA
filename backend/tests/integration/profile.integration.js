@@ -2,7 +2,7 @@ const request = require('supertest');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const { sequelize, User } = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -11,27 +11,28 @@ let targetVerified = false;
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL);
-  const [target] = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await sequelize.query('SELECT current_database() AS name, inet_server_port() AS port');
+  const [target] = rows;
   if (target.name !== 'siga_test' || target.port !== 5433 ||
     !['127.0.0.1', 'localhost'].includes(url.hostname) || url.port !== '5433' || url.pathname !== '/siga_test') {
     throw new Error('Esta integración solo puede escribir en siga_test en localhost:5433');
   }
   targetVerified = true;
-  const user = await prisma.user.create({ data: {
+  const user = await User.create({
     email: `profile-${randomUUID()}@test.invalid`,
     passwordHash: await bcrypt.hash('FraseTemporalSegura123', 10),
     firstName: 'Nombre', lastName: 'Inicial', role: 'ESTUDIANTE',
-  } });
+  });
   testUserId = user.id;
 });
 
 afterAll(async () => {
-  if (targetVerified && testUserId) await prisma.user.delete({ where: { id: testUserId } });
-  await prisma.$disconnect();
+  if (targetVerified && testUserId) await User.destroy({ where: { id: testUserId } });
+  await sequelize.close();
 });
 
 test('PostgreSQL: solo cambia el nombre propio; conserva credenciales, rol y versión', async () => {
-  const before = await prisma.user.findUnique({ where: { id: testUserId } });
+  const before = await User.findByPk(testUserId);
   const token = jwt.sign({ tokenVersion: before.tokenVersion }, process.env.JWT_SECRET, {
     algorithm: 'HS256', subject: before.id, expiresIn: '1h',
   });
@@ -46,7 +47,7 @@ test('PostgreSQL: solo cambia el nombre propio; conserva credenciales, rol y ver
     lastName: 'Propio', role: 'ESTUDIANTE',
   });
   expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|isActive/);
-  const after = await prisma.user.findUnique({ where: { id: testUserId } });
+  const after = await User.findByPk(testUserId);
   expect(after.passwordHash).toBe(before.passwordHash);
   expect(after.email).toBe(before.email);
   expect(after.role).toBe(before.role);

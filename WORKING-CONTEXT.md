@@ -15,9 +15,9 @@ Sistema de Información de Gestión Académica (SIGA). Aplicación web fullstack
 ```
 SIGA/
 ├── backend/
-│   ├── prisma/
-│   │   ├── schema.prisma          ← esquema SQL/relacional de referencia
-│   │   └── migrations/            ← 5 migraciones SQL (sprint1 → session_revocation)
+│   ├── database/
+│   │   ├── migrate.js             ← ejecutor SQL de migraciones (schema_migrations)
+│   │   └── migrations/            ← 5 migraciones SQL (001 → 005)
 │   └── src/
 │       ├── app.js                 ← Express app factory
 │       ├── server.js              ← valida conexión PostgreSQL con sequelize.authenticate()
@@ -56,7 +56,7 @@ SIGA/
         └── utils/                 ← buildVersion.js, format.js
 ```
 
-## Modelos de datos (schema.prisma)
+## Modelos de datos (backend/src/models/)
 | Modelo              | Descripción                                             |
 |---------------------|---------------------------------------------------------|
 | User                | Cuenta del sistema (roles: ADMIN, SECRETARIA, DOCENTE, ESTUDIANTE) |

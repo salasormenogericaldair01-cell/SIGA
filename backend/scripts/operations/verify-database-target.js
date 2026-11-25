@@ -1,6 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const { sequelize } = require('../../src/models');
 
-async function verifyTarget(prisma, expected = process.env.DEMO_TARGET) {
+async function verifyTarget(db, expected = process.env.DEMO_TARGET) {
   if (!['siga', 'siga_test', 'siga_demo_egx3'].includes(expected)) {
     throw new Error('DEMO_TARGET debe ser siga, siga_test o siga_demo_egx3');
   }
@@ -26,7 +26,8 @@ async function verifyTarget(prisma, expected = process.env.DEMO_TARGET) {
   } else if (url.hostname !== '127.0.0.1' || url.port !== '5433') {
     throw new Error('DATABASE_URL no coincide con el destino local declarado');
   }
-  const [row] = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await db.query('SELECT current_database() AS name, inet_server_port() AS port');
+  const [row] = rows;
   if (row.name !== expected || row.port !== (cloud ? 5432 : 5433)) {
     throw new Error('La conexión PostgreSQL no coincide con el destino declarado');
   }
@@ -34,11 +35,10 @@ async function verifyTarget(prisma, expected = process.env.DEMO_TARGET) {
 }
 
 if (require.main === module) {
-  const prisma = new PrismaClient();
-  verifyTarget(prisma)
+  verifyTarget(sequelize)
     .then(({ name, port }) => console.log(`Destino verificado: ${name} en puerto ${port}`))
     .catch((error) => { console.error(error.message); process.exitCode = 1; })
-    .finally(() => prisma.$disconnect());
+    .finally(() => sequelize.close());
 }
 
 module.exports = verifyTarget;

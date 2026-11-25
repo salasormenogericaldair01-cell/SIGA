@@ -1,4 +1,4 @@
-const { backendRequire, prisma, verifyLocalTestDatabase } = require('./target.cjs');
+const { backendRequire, sequelize, verifyLocalTestDatabase } = require('./target.cjs');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -27,8 +27,8 @@ async function main() {
   server.on('error', (error) => { console.error(`No se pudo abrir la API local: ${error.code || 'error'}`); process.exitCode = 1; });
   process.on('SIGINT', () => server.close(async () => {
     if (fs.existsSync(proofFile)) fs.unlinkSync(proofFile);
-    await prisma.$disconnect();
+    await sequelize.close();
   }));
 }
 
-main().catch(async (error) => { console.error(error.message); process.exitCode = 1; await prisma.$disconnect(); });
+main().catch(async (error) => { console.error(error.message); process.exitCode = 1; await sequelize.close(); });

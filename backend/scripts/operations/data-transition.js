@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const bcrypt = require('bcrypt');
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { Op, Transaction } = require('sequelize');
+const defaultModels = require('../../src/models');
 const { createUserSchema } = require('../../src/modules/users/users.validator');
 const {
   ControlledError, ROLES, FORBIDDEN, verifyDatabase, outsideRepository, backupReceipt,
@@ -8,8 +9,8 @@ const {
 } = require('./data-transition-core');
 
 const KEYS = Object.keys(ROLES);
-const date = (value) => new Date(`${value}T00:00:00.000Z`);
-const gradeName = (code, order) => code === 'INICIAL' ? `${order} años` : `${order}.º`;
+const date = (value) => value;
+const gradeName = (code, order) => (code === 'INICIAL' ? `${order} años` : `${order}.º`);
 const gradeOrders = { INICIAL: [3, 4, 5], PRIMARIA: [1, 2, 3, 4, 5, 6], SECUNDARIA: [1, 2, 3, 4, 5] };
 
 function credentials(env) {
@@ -39,8 +40,11 @@ function legacyEmails(env) {
   return emails;
 }
 
-async function requireLegacyCatalog(tx) {
-  const levels = await tx.educationLevel.findMany({ include: { grades: true } });
+async function requireLegacyCatalog(transaction, db = defaultModels) {
+  const levels = await db.EducationLevel.findAll({
+    include: [{ model: db.Grade, as: 'grades' }],
+    transaction,
+  });
   if (levels.length !== 2 || levels.reduce((sum, item) => sum + item.grades.length, 0) !== 2) {
     throw new ControlledError('El catálogo de partida cambió; no se modificó nada');
   }
@@ -55,59 +59,89 @@ async function requireLegacyCatalog(tx) {
   return levels;
 }
 
-async function prepare(tx, people, hashes) {
-  if (await tx.user.count({ where: { email: { in: KEYS.map((key) => people[key].email) } } })) {
+async function prepare(transaction, people, hashes, db = defaultModels) {
+  if (await db.User.count({ where: { email: KEYS.map((key) => people[key].email) }, transaction })) {
     throw new ControlledError('La transición ya empezó o hay cuentas coincidentes; no se repite');
   }
-  if (await tx.academicPeriod.findUnique({ where: { name: '2026' } })
-    || await tx.course.count({ where: { code: { in: ['MAT-01', 'COM-01'] } } })
-    || await tx.student.count({ where: { studentCode: { in: ['SIGA-2026-01', 'SIGA-2026-02'] } } })) {
+  if (await db.AcademicPeriod.findOne({ where: { name: '2026' }, transaction })
+    || await db.Course.count({ where: { code: ['MAT-01', 'COM-01'] }, transaction })
+    || await db.Student.count({ where: { studentCode: ['SIGA-2026-01', 'SIGA-2026-02'] }, transaction })) {
     throw new ControlledError('Hay datos académicos coincidentes; no se sobrescriben');
   }
-  const existing = await requireLegacyCatalog(tx);
+  const existing = await requireLegacyCatalog(transaction, db);
   const levels = {};
   const grades = {};
   for (const [code, orders] of Object.entries(gradeOrders)) {
     const prior = existing.find((row) => row.code === code);
-    levels[code] = prior
-      ? await tx.educationLevel.update({ where: { id: prior.id }, data: { name: code[0] + code.slice(1).toLowerCase() } })
-      : await tx.educationLevel.create({ data: { code, name: 'Inicial' } });
+    if (prior) {
+      await prior.update({ name: code[0] + code.slice(1).toLowerCase() }, { transaction });
+      levels[code] = prior;
+    } else {
+      levels[code] = await db.EducationLevel.create({ code, name: 'Inicial' }, { transaction });
+    }
     grades[code] = {};
     for (const order of orders) {
       const priorGrade = prior?.grades.find((row) => row.order === order);
-      grades[code][order] = priorGrade
-        ? await tx.grade.update({ where: { id: priorGrade.id }, data: { name: gradeName(code, order) } })
-        : await tx.grade.create({ data: { educationLevelId: levels[code].id, order, name: gradeName(code, order) } });
+      if (priorGrade) {
+        await priorGrade.update({ name: gradeName(code, order) }, { transaction });
+        grades[code][order] = priorGrade;
+      } else {
+        grades[code][order] = await db.Grade.create(
+          { educationLevelId: levels[code].id, order, name: gradeName(code, order) },
+          { transaction },
+        );
+      }
     }
   }
   const users = {};
   for (const key of KEYS) {
     const { password: _password, ...data } = people[key];
-    users[key] = await tx.user.create({ data: { ...data, passwordHash: hashes[key] } });
+    users[key] = await db.User.create({ ...data, passwordHash: hashes[key] }, { transaction });
   }
-  const period = await tx.academicPeriod.create({ data: { name: '2026', startDate: date('2026-01-01'), endDate: date('2026-12-31') } });
+  const period = await db.AcademicPeriod.create(
+    { name: '2026', startDate: date('2026-01-01'), endDate: date('2026-12-31') },
+    { transaction },
+  );
   const sections = {
-    A: await tx.section.create({ data: { name: 'A', gradeId: grades.PRIMARIA[1].id, academicPeriodId: period.id } }),
-    B: await tx.section.create({ data: { name: 'B', gradeId: grades.SECUNDARIA[1].id, academicPeriodId: period.id } }),
+    A: await db.Section.create({ name: 'A', gradeId: grades.PRIMARIA[1].id, academicPeriodId: period.id }, { transaction }),
+    B: await db.Section.create({ name: 'B', gradeId: grades.SECUNDARIA[1].id, academicPeriodId: period.id }, { transaction }),
   };
   const teachers = {
-    A: await tx.teacher.create({ data: { userId: users.DOCENTE_A.id } }),
-    B: await tx.teacher.create({ data: { userId: users.DOCENTE_B.id } }),
+    A: await db.Teacher.create({ userId: users.DOCENTE_A.id }, { transaction }),
+    B: await db.Teacher.create({ userId: users.DOCENTE_B.id }, { transaction }),
   };
   const students = {
-    A: await tx.student.create({ data: { studentCode: 'SIGA-2026-01', firstName: 'Estudiante', lastName: '01', birthDate: date('2015-05-15'), userId: users.ESTUDIANTE_A.id } }),
-    B: await tx.student.create({ data: { studentCode: 'SIGA-2026-02', firstName: 'Estudiante', lastName: '02', birthDate: date('2012-05-15'), userId: users.ESTUDIANTE_B.id } }),
+    A: await db.Student.create(
+      { studentCode: 'SIGA-2026-01', firstName: 'Estudiante', lastName: '01', birthDate: date('2015-05-15'), userId: users.ESTUDIANTE_A.id },
+      { transaction },
+    ),
+    B: await db.Student.create(
+      { studentCode: 'SIGA-2026-02', firstName: 'Estudiante', lastName: '02', birthDate: date('2012-05-15'), userId: users.ESTUDIANTE_B.id },
+      { transaction },
+    ),
   };
   const courses = {
-    A: await tx.course.create({ data: { code: 'MAT-01', name: 'Matemática' } }),
-    B: await tx.course.create({ data: { code: 'COM-01', name: 'Comunicación' } }),
+    A: await db.Course.create({ code: 'MAT-01', name: 'Matemática' }, { transaction }),
+    B: await db.Course.create({ code: 'COM-01', name: 'Comunicación' }, { transaction }),
   };
   for (const key of ['A', 'B']) {
     const sectionId = sections[key].id;
-    const assignment = await tx.teachingAssignment.create({ data: { sectionId, courseId: courses[key].id, teacherId: teachers[key].id } });
-    const enrollment = await tx.enrollment.create({ data: { sectionId, studentId: students[key].id, academicPeriodId: period.id } });
-    await tx.gradeRecord.create({ data: { sectionId, teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, term: 1, value: key === 'A' ? 'A' : 'B' } });
-    await tx.attendanceRecord.create({ data: { sectionId, teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, date: date('2026-09-30'), status: 'PRESENT' } });
+    const assignment = await db.TeachingAssignment.create(
+      { sectionId, courseId: courses[key].id, teacherId: teachers[key].id },
+      { transaction },
+    );
+    const enrollment = await db.Enrollment.create(
+      { sectionId, studentId: students[key].id, academicPeriodId: period.id },
+      { transaction },
+    );
+    await db.GradeRecord.create(
+      { sectionId, teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, term: 1, value: key === 'A' ? 'A' : 'B' },
+      { transaction },
+    );
+    await db.AttendanceRecord.create(
+      { sectionId, teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, date: date('2026-09-30'), status: 'PRESENT' },
+      { transaction },
+    );
   }
   return { adminId: users.ADMIN.id };
 }
@@ -138,8 +172,10 @@ function assertLegacyGraph(graph, legacy) {
   const teacherByKey = Object.fromEntries(teachers.map((item) => [item.userId === byEmail[legacy.DOCENTE_A].id ? 'A' : 'B', item]));
   const sectionByKey = Object.fromEntries(sections.map((item) => [item.name.slice(-1), item]));
   const courseByKey = Object.fromEntries(courses.map((item) => [item.code.slice(-3) === 'MAT' ? 'A' : 'B', item]));
-  if (period.name !== 'DEMO 2026' || period.startDate.toISOString().slice(0, 10) !== '2026-01-01'
-    || period.endDate.toISOString().slice(0, 10) !== '2026-12-31') throw new ControlledError('Periodo DEMO inesperado');
+  const isoDate = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10));
+  if (period.name !== 'DEMO 2026' || isoDate(period.startDate) !== '2026-01-01' || isoDate(period.endDate) !== '2026-12-31') {
+    throw new ControlledError('Periodo DEMO inesperado');
+  }
   for (const key of ['A', 'B']) {
     const student = studentByKey[key];
     const teacher = teacherByKey[key];
@@ -163,54 +199,96 @@ function assertLegacyGraph(graph, legacy) {
   }
 }
 
-async function readLegacyGraph(tx, legacy) {
-  const users = await tx.user.findMany({ where: { email: { in: Object.values(legacy) } } });
+async function readLegacyGraph(transaction, legacy, db = defaultModels) {
+  const users = await db.User.findAll({ where: { email: Object.values(legacy) }, transaction });
   const userIds = users.map((item) => item.id);
-  const students = await tx.student.findMany({ where: { studentCode: { in: ['DEMO-EST-A', 'DEMO-EST-B'] } } });
-  const teachers = await tx.teacher.findMany({ where: { userId: { in: userIds } } });
-  const period = await tx.academicPeriod.findUnique({ where: { name: 'DEMO 2026' } });
-  const sections = await tx.section.findMany({ where: { academicPeriodId: period?.id }, include: { grade: { include: { educationLevel: true } } } });
-  const courses = await tx.course.findMany({ where: { code: { in: ['DEMO-MAT', 'DEMO-COM'] } } });
-  const assignments = await tx.teachingAssignment.findMany({ where: { OR: [{ sectionId: { in: sections.map((row) => row.id) } }, { courseId: { in: courses.map((row) => row.id) } }, { teacherId: { in: teachers.map((row) => row.id) } }] } });
-  const enrollments = await tx.enrollment.findMany({ where: { OR: [{ sectionId: { in: sections.map((row) => row.id) } }, { studentId: { in: students.map((row) => row.id) } }, { academicPeriodId: period?.id }] } });
-  const grades = await tx.gradeRecord.findMany({ where: { OR: [{ teachingAssignmentId: { in: assignments.map((row) => row.id) } }, { enrollmentId: { in: enrollments.map((row) => row.id) } }] } });
-  const attendance = await tx.attendanceRecord.findMany({ where: { OR: [{ teachingAssignmentId: { in: assignments.map((row) => row.id) } }, { enrollmentId: { in: enrollments.map((row) => row.id) } }] } });
+  const students = await db.Student.findAll({ where: { studentCode: ['DEMO-EST-A', 'DEMO-EST-B'] }, transaction });
+  const teachers = await db.Teacher.findAll({ where: { userId: userIds }, transaction });
+  const period = await db.AcademicPeriod.findOne({ where: { name: 'DEMO 2026' }, transaction });
+  const sections = await db.Section.findAll({
+    where: { academicPeriodId: period?.id || null },
+    include: [{ model: db.Grade, as: 'grade', include: [{ model: db.EducationLevel, as: 'educationLevel' }] }],
+    transaction,
+  });
+  const courses = await db.Course.findAll({ where: { code: ['DEMO-MAT', 'DEMO-COM'] }, transaction });
+  const assignments = await db.TeachingAssignment.findAll({
+    where: {
+      [Op.or]: [
+        { sectionId: sections.map((row) => row.id) },
+        { courseId: courses.map((row) => row.id) },
+        { teacherId: teachers.map((row) => row.id) },
+      ],
+    },
+    transaction,
+  });
+  const enrollments = await db.Enrollment.findAll({
+    where: {
+      [Op.or]: [
+        { sectionId: sections.map((row) => row.id) },
+        { studentId: students.map((row) => row.id) },
+        { academicPeriodId: period?.id || null },
+      ],
+    },
+    transaction,
+  });
+  const grades = await db.GradeRecord.findAll({
+    where: {
+      [Op.or]: [
+        { teachingAssignmentId: assignments.map((row) => row.id) },
+        { enrollmentId: enrollments.map((row) => row.id) },
+      ],
+    },
+    transaction,
+  });
+  const attendance = await db.AttendanceRecord.findAll({
+    where: {
+      [Op.or]: [
+        { teachingAssignmentId: assignments.map((row) => row.id) },
+        { enrollmentId: enrollments.map((row) => row.id) },
+      ],
+    },
+    transaction,
+  });
   return { users, students, teachers, period, sections, courses, assignments, enrollments, grades, attendance };
 }
 
-async function assertNoForbiddenLabels(tx) {
+async function assertNoForbiddenLabels(transaction, db = defaultModels) {
   const fields = [
-    ['user', ['email', 'firstName', 'lastName']],
-    ['educationLevel', ['name']], ['grade', ['name']], ['academicPeriod', ['name']],
-    ['section', ['name']], ['student', ['studentCode', 'firstName', 'lastName']],
-    ['course', ['code', 'name']],
+    ['User', ['email', 'firstName', 'lastName']],
+    ['EducationLevel', ['name']], ['Grade', ['name']], ['AcademicPeriod', ['name']],
+    ['Section', ['name']], ['Student', ['studentCode', 'firstName', 'lastName']],
+    ['Course', ['code', 'name']],
   ];
   for (const [model, keys] of fields) {
-    const rows = await tx[model].findMany({ select: Object.fromEntries(keys.map((key) => [key, true])) });
+    const rows = await db[model].findAll({ attributes: keys, raw: true, transaction });
     if (rows.some((row) => keys.some((key) => FORBIDDEN.test(row[key])))) {
       throw new ControlledError('Quedan etiquetas no permitidas; retiro revertido');
     }
   }
 }
 
-async function retire(tx, people, proof, legacy) {
-  const admin = await tx.user.findUnique({ where: { email: people.ADMIN.email } });
+async function retire(transaction, people, proof, legacy, db = defaultModels) {
+  const admin = await db.User.findOne({ where: { email: people.ADMIN.email }, transaction });
   if (!admin || !admin.isActive || admin.role !== 'ADMIN') throw new ControlledError('El nuevo ADMIN no está activo');
   checkAccessProof(proof, Object.fromEntries(KEYS.map((key) => [key, emailDigest(people[key].email)])), admin.id);
-  const graph = await readLegacyGraph(tx, legacy);
+  const graph = await readLegacyGraph(transaction, legacy, db);
   assertLegacyGraph(graph, legacy);
   for (const [model, rows] of [
-    ['gradeRecord', graph.grades], ['attendanceRecord', graph.attendance],
-    ['enrollment', graph.enrollments], ['teachingAssignment', graph.assignments],
-    ['section', graph.sections], ['student', graph.students], ['teacher', graph.teachers],
-    ['course', graph.courses], ['academicPeriod', [graph.period]], ['user', graph.users],
+    ['GradeRecord', graph.grades], ['AttendanceRecord', graph.attendance],
+    ['Enrollment', graph.enrollments], ['TeachingAssignment', graph.assignments],
+    ['Section', graph.sections], ['Student', graph.students], ['Teacher', graph.teachers],
+    ['Course', graph.courses], ['AcademicPeriod', [graph.period]], ['User', graph.users],
   ]) {
     const ids = rows.map((row) => row.id);
-    const result = await tx[model].deleteMany({ where: { id: { in: ids } } });
-    if (result.count !== ids.length) throw new ControlledError('El retiro no coincidió con los registros revisados');
+    const deleted = await db[model].destroy({ where: { id: ids }, transaction });
+    if (deleted !== ids.length) throw new ControlledError('El retiro no coincidió con los registros revisados');
   }
-  await assertNoForbiddenLabels(tx);
-  const counts = await Promise.all([tx.educationLevel.count(), tx.grade.count(), tx.user.count({ where: { id: admin.id, role: 'ADMIN', isActive: true } })]);
+  await assertNoForbiddenLabels(transaction, db);
+  const counts = await Promise.all([
+    db.EducationLevel.count({ transaction }),
+    db.Grade.count({ transaction }),
+    db.User.count({ where: { id: admin.id, role: 'ADMIN', isActive: true }, transaction }),
+  ]);
   if (counts[0] !== 3 || counts[1] !== 14 || counts[2] !== 1) throw new ControlledError('Catálogo o ADMIN incompleto; retiro revertido');
 }
 
@@ -218,30 +296,38 @@ async function main() {
   const stage = process.argv[2];
   if (!['prepare', 'retire'].includes(stage)) throw new ControlledError('Etapa requerida: prepare o retire');
   requireConfirmation(process.env, stage);
-  const prisma = new PrismaClient();
+  const { sequelize } = defaultModels;
   try {
-    const target = await verifyDatabase(prisma, process.env);
+    const target = await verifyDatabase(sequelize, process.env);
     const backup = backupReceipt(process.env.BETA_BACKUP_FILE, target.hostname);
     const people = credentials(process.env);
     const legacy = legacyEmails(process.env);
     if (stage === 'prepare') {
       const hashes = Object.fromEntries(await Promise.all(KEYS.map(async (key) => [key, await bcrypt.hash(people[key].password, 12)])));
-      await prisma.$transaction(async (tx) => {
-        await verifyDatabase(tx, process.env);
-        return prepare(tx, people, hashes);
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 120000 });
+      await sequelize.transaction(
+        { isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE },
+        async (transaction) => {
+          await verifyDatabase(sequelize, process.env, transaction);
+          return prepare(transaction, people, hashes, defaultModels);
+        },
+      );
       console.log('Datos nuevos preparados; el ADMIN anterior permanece. Verifica accesos antes del retiro.');
     } else {
       const proofFile = outsideRepository(process.env.BETA_ACCESS_PROOF_FILE);
       const proof = JSON.parse(fs.readFileSync(proofFile, 'utf8'));
       if (proof.archiveSha256 !== backup.archiveSha256) throw new ControlledError('La comprobación API no corresponde al respaldo verificado');
-      await prisma.$transaction(async (tx) => {
-        await verifyDatabase(tx, process.env);
-        return retire(tx, people, proof, legacy);
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 120000 });
+      await sequelize.transaction(
+        { isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE },
+        async (transaction) => {
+          await verifyDatabase(sequelize, process.env, transaction);
+          return retire(transaction, people, proof, legacy, defaultModels);
+        },
+      );
       console.log('Registros anteriores retirados; catálogo y ADMIN nuevo verificados.');
     }
-  } finally { await prisma.$disconnect(); }
+  } finally {
+    await sequelize.close();
+  }
 }
 
 if (require.main === module) main().catch((error) => {

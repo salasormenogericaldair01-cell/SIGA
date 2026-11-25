@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { prisma, verifyLocalTestDatabase } = require('./target.cjs');
+const { sequelize, verifyLocalTestDatabase } = require('./target.cjs');
 
 const output = path.resolve(__dirname, 'results');
 const base = 'http://127.0.0.1:3000/api';
@@ -88,4 +88,4 @@ async function main() {
 }
 
 main().catch((error) => { console.error(error.message); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => sequelize.close());

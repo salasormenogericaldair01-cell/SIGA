@@ -6,9 +6,23 @@ import { createRequire } from 'node:module';
 import { chromium } from 'playwright-core';
 
 const requireBackend = createRequire(new URL('../../../backend/package.json', import.meta.url));
-const { PrismaClient } = requireBackend('@prisma/client');
+const models = requireBackend('./src/models');
+const { sequelize } = models;
 const verifyTarget = requireBackend('./scripts/operations/verify-database-target');
-const prisma = new PrismaClient();
+const modelByKind = {
+  attendanceRecord: models.AttendanceRecord,
+  gradeRecord: models.GradeRecord,
+  enrollment: models.Enrollment,
+  teachingAssignment: models.TeachingAssignment,
+  course: models.Course,
+  section: models.Section,
+  academicPeriod: models.AcademicPeriod,
+  grade: models.Grade,
+  educationLevel: models.EducationLevel,
+  teacher: models.Teacher,
+  student: models.Student,
+  user: models.User,
+};
 const apiBase = 'http://localhost:3010/api';
 const frontendBase = 'http://localhost:5174';
 const suffix = randomUUID().slice(0, 8);
@@ -77,17 +91,17 @@ async function createFromEditor(page, pathname, kind) {
   return record;
 }
 async function cleanup() {
-  await verifyTarget(prisma, 'siga_test');
+  await verifyTarget(sequelize, 'siga_test');
   if (changedAssignmentId && originalTeacherId) {
-    await prisma.teachingAssignment.update({ where: { id: changedAssignmentId }, data: { teacherId: originalTeacherId } });
+    await models.TeachingAssignment.update({ teacherId: originalTeacherId }, { where: { id: changedAssignmentId } });
   }
   for (const kind of Object.keys(ids)) {
-    if (ids[kind].length) await prisma[kind].deleteMany({ where: { id: { in: ids[kind] } } });
+    if (ids[kind].length) await modelByKind[kind].destroy({ where: { id: ids[kind] } });
   }
 }
 
 try {
-  await verifyTarget(prisma, 'siga_test');
+  await verifyTarget(sequelize, 'siga_test');
   const credentials = {
     admin: ['demo-admin@siga.invalid', process.env.DEMO_ADMIN_PASSWORD],
     secretaria: ['demo-secretaria@siga.invalid', process.env.DEMO_SECRETARIA_PASSWORD],
@@ -396,5 +410,5 @@ try {
 } finally {
   if (browser) await browser.close();
   try { await cleanup(); } catch (error) { console.error(`Limpieza E2E pendiente: ${error.code || error.name}`); process.exitCode = 1; }
-  await prisma.$disconnect();
+  await sequelize.close();
 }

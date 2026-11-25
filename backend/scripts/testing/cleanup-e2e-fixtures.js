@@ -1,10 +1,37 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { PrismaClient } = require('@prisma/client');
+const {
+  sequelize,
+  User,
+  Student,
+  Teacher,
+  EducationLevel,
+  Grade,
+  AcademicPeriod,
+  Section,
+  Course,
+  TeachingAssignment,
+  Enrollment,
+  GradeRecord,
+  AttendanceRecord,
+} = require('../../src/models');
 const verifyTarget = require('../operations/verify-database-target');
 
-const prisma = new PrismaClient();
 const order = ['attendanceRecord', 'gradeRecord', 'enrollment', 'teachingAssignment', 'course', 'section', 'academicPeriod', 'grade', 'educationLevel', 'teacher', 'student', 'user'];
+const models = {
+  attendanceRecord: AttendanceRecord,
+  gradeRecord: GradeRecord,
+  enrollment: Enrollment,
+  teachingAssignment: TeachingAssignment,
+  course: Course,
+  section: Section,
+  academicPeriod: AcademicPeriod,
+  grade: Grade,
+  educationLevel: EducationLevel,
+  teacher: Teacher,
+  student: Student,
+  user: User,
+};
 const file = path.resolve(__dirname, '../../.env.demo-siga_test-manifest.json');
 const demoEmails = new Set(['admin', 'secretaria', 'docente-a', 'docente-b', 'estudiante-a', 'estudiante-b'].map((name) => `demo-${name}@siga.invalid`));
 const teacherEmails = new Set(['demo-docente-a@siga.invalid', 'demo-docente-b@siga.invalid']);
@@ -12,13 +39,23 @@ const studentCodes = new Set(['DEMO-EST-A', 'DEMO-EST-B']);
 const courseCodes = new Set(['DEMO-MAT', 'DEMO-COM']);
 const sectionNames = new Set(['DEMO-A', 'DEMO-B']);
 const includes = {
-  teacher: { user: true },
-  grade: { educationLevel: true },
-  section: { academicPeriod: true },
-  teachingAssignment: { course: true, section: true, teacher: { include: { user: true } } },
-  enrollment: { student: true, section: true },
-  gradeRecord: { teachingAssignment: { include: { course: true } }, enrollment: { include: { student: true } } },
-  attendanceRecord: { teachingAssignment: { include: { course: true } }, enrollment: { include: { student: true } } },
+  teacher: [{ model: User, as: 'user' }],
+  grade: [{ model: EducationLevel, as: 'educationLevel' }],
+  section: [{ model: AcademicPeriod, as: 'academicPeriod' }],
+  teachingAssignment: [
+    { model: Course, as: 'course' },
+    { model: Section, as: 'section' },
+    { model: Teacher, as: 'teacher', include: [{ model: User, as: 'user' }] },
+  ],
+  enrollment: [{ model: Student, as: 'student' }, { model: Section, as: 'section' }],
+  gradeRecord: [
+    { model: TeachingAssignment, as: 'teachingAssignment', include: [{ model: Course, as: 'course' }] },
+    { model: Enrollment, as: 'enrollment', include: [{ model: Student, as: 'student' }] },
+  ],
+  attendanceRecord: [
+    { model: TeachingAssignment, as: 'teachingAssignment', include: [{ model: Course, as: 'course' }] },
+    { model: Enrollment, as: 'enrollment', include: [{ model: Student, as: 'student' }] },
+  ],
 };
 
 function belongsToDemo(kind, row) {
@@ -41,7 +78,7 @@ function belongsToDemo(kind, row) {
 
 async function main() {
   if (process.env.DEMO_TARGET !== 'siga_test') throw new Error('La limpieza DEMO solo admite siga_test');
-  await verifyTarget(prisma, 'siga_test');
+  await verifyTarget(sequelize, 'siga_test');
   if (!fs.existsSync(file)) throw new Error('No existe el manifiesto de registros DEMO creados en siga_test');
   const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
   for (const kind of order) {
@@ -49,19 +86,23 @@ async function main() {
       throw new Error('Manifiesto DEMO inválido');
     }
   }
-  await prisma.$transaction(async (tx) => {
+  await sequelize.transaction(async (transaction) => {
     for (const kind of order) {
       const ids = manifest[kind];
       if (!ids.length) continue;
-      const rows = await tx[kind].findMany({ where: { id: { in: ids } }, ...(includes[kind] ? { include: includes[kind] } : {}) });
+      const rows = await models[kind].findAll({
+        where: { id: ids },
+        ...(includes[kind] ? { include: includes[kind] } : {}),
+        transaction,
+      });
       if (new Set(ids).size !== ids.length || rows.length !== ids.length || rows.some((row) => !belongsToDemo(kind, row))) {
         throw new Error('El manifiesto contiene IDs ajenos o inexistentes; no se eliminó ningún registro');
       }
     }
     for (const kind of order) {
       if (manifest[kind].length) {
-        const result = await tx[kind].deleteMany({ where: { id: { in: manifest[kind] } } });
-        if (result.count !== manifest[kind].length) throw new Error('La limpieza no coincidió con el manifiesto');
+        const deleted = await models[kind].destroy({ where: { id: manifest[kind] }, transaction });
+        if (deleted !== manifest[kind].length) throw new Error('La limpieza no coincidió con el manifiesto');
       }
     }
   });
@@ -72,4 +113,4 @@ async function main() {
 main().catch((error) => {
   console.error(`No se pudo limpiar la demo de pruebas: ${error.code || error.message}`);
   process.exitCode = 1;
-}).finally(() => prisma.$disconnect());
+}).finally(() => sequelize.close());

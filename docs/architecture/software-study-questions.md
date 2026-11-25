@@ -24,15 +24,15 @@ Cada respuesta corta cabe en una exposición oral. La explicación aporta el mat
 
 ### 4. ¿Por qué separar React y Express?
 - **Corta:** La interfaz presenta datos y la API concentra reglas y permisos.
-- **Ampliada:** El navegador llama a HTTP; los servicios acceden a PostgreSQL mediante Prisma. La base no se expone al navegador.
+- **Ampliada:** El navegador llama a HTTP; los servicios acceden a PostgreSQL mediante Sequelize. La base no se expone al navegador.
 - **Evidencia:** [cliente HTTP](../../frontend/src/services/api.js), [rutas API](../../backend/src/routes/index.js).
 - **Evitar:** Decir que ocultar un botón protege una operación.
 
-### 5. ¿Qué hacen Vite, Prisma y PostgreSQL?
-- **Corta:** Vite construye React; Prisma modela consultas; PostgreSQL almacena y restringe datos.
+### 5. ¿Qué hacen Vite, Sequelize y PostgreSQL?
+- **Corta:** Vite construye React; Sequelize modela consultas; PostgreSQL almacena y restringe datos.
 - **Ampliada:** Las validaciones de servicio y las claves de base se complementan: una no sustituye a la otra.
-- **Evidencia:** [configuración frontend](../../frontend/package.json), [esquema](../../backend/prisma/schema.prisma).
-- **Evitar:** Atribuir autenticación automática a Prisma.
+- **Evidencia:** [configuración frontend](../../frontend/package.json), [modelos Sequelize](../../backend/src/models/index.js).
+- **Evitar:** Atribuir autenticación automática a Sequelize.
 
 ### 6. ¿Dónde está alojada la demostración?
 - **Corta:** Frontend en Vercel; API y PostgreSQL en Render.
@@ -51,55 +51,55 @@ Cada respuesta corta cabe en una exposición oral. La explicación aporta el mat
 ### 8. ¿Por qué usar UUID?
 - **Corta:** Son identificadores estables de registros.
 - **Ampliada:** Facilitan relacionar entidades sin depender de nombres, pero un UUID conocido no autoriza acceso.
-- **Evidencia:** [esquema](../../backend/prisma/schema.prisma), [alcance](../../backend/src/services/record-access.service.js).
+- **Evidencia:** [modelos Sequelize](../../backend/src/models/), [alcance](../../backend/src/shared/record-access.js).
 - **Evitar:** Llamar al UUID una medida suficiente contra IDOR.
 
 ### 9. ¿Puede existir un estudiante sin cuenta?
 - **Corta:** Sí; la ficha Student tiene User opcional.
 - **Ampliada:** La matrícula usa la ficha y muestra su nombre aunque no exista credencial de acceso. Una cuenta vinculada debe estar activa y tener rol ESTUDIANTE.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma), [servicio de matrículas](../../backend/src/services/enrollment.service.js).
+- **Evidencia:** [Student.js](../../backend/src/models/Student.js), [servicio de matrículas](../../backend/src/modules/enrollments/enrollments.service.js).
 - **Evitar:** Suponer que crear ficha crea contraseña automáticamente.
 
 ### 10. ¿Por qué Teacher no duplica el nombre?
 - **Corta:** El perfil docente usa el User vinculado.
 - **Ampliada:** userId es obligatorio y único; el nombre y correo viven en la cuenta, evitando copias divergentes.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma).
+- **Evidencia:** [Teacher.js](../../backend/src/models/Teacher.js).
 - **Evitar:** Decir que cualquier User puede ser Teacher; exige rol DOCENTE y cuenta activa.
 
 ### 11. ¿Cómo se evita una matrícula con periodo equivocado?
 - **Corta:** El periodo proviene de la sección y una clave foránea compuesta protege la relación.
 - **Ampliada:** Enrollment guarda sectionId y academicPeriodId; el par debe existir en Section. El cliente no envía libremente el periodo.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma), [integración de matrícula](../../backend/tests/integration/people-enrollment.integration.js).
+- **Evidencia:** [migración 003](../../backend/database/migrations/003_students_teachers_enrollments.sql), [integración de matrícula](../../backend/tests/integration/people-enrollment.integration.js).
 - **Evitar:** Decir que depende solo de una validación JavaScript.
 
 ### 12. ¿Puede un estudiante tener dos matrículas en el mismo periodo?
 - **Corta:** No; el par estudiante-periodo es único.
 - **Ampliada:** La unicidad también incluye una matrícula CANCELLED. Para volver a matricular se reactiva la existente según las reglas.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma).
+- **Evidencia:** [Enrollment.js](../../backend/src/models/Enrollment.js).
 - **Evitar:** Crear una segunda fila tras cancelar.
 
 ### 13. ¿Cómo se asegura que una nota pertenezca a la sección correcta?
 - **Corta:** Hay claves compuestas hacia matrícula y asignación con el mismo sectionId.
 - **Ampliada:** El servicio deriva sectionId; PostgreSQL exige que ambos vínculos correspondan a esa sección.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma), [pruebas académicas](../../backend/tests/integration/course-record.integration.js).
+- **Evidencia:** [migración 004](../../backend/database/migrations/004_courses_grades_attendance.sql), [pruebas académicas](../../backend/tests/integration/course-record.integration.js).
 - **Evitar:** Presentarlo como comprobación únicamente de interfaz.
 
 ### 14. ¿Por qué se rechaza un traslado con registros académicos?
 - **Corta:** Cambiar sección dejaría notas y asistencias asociadas a otra asignación.
 - **Ampliada:** Las claves compuestas y la regla del servicio lo bloquean con 409; no se mueven ni borran registros históricos.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma), [servicio de matrículas](../../backend/src/services/enrollment.service.js).
+- **Evidencia:** [migración 004](../../backend/database/migrations/004_courses_grades_attendance.sql), [servicio de matrículas](../../backend/src/modules/enrollments/enrollments.service.js).
 - **Evitar:** Prometer traslado automático de notas.
 
 ### 15. ¿Qué representa una calificación?
 - **Corta:** Un valor AD, A, B o C por curso/asignación, matrícula y bimestre.
 - **Ampliada:** Es una simplificación del proyecto. No modela competencias ni equivale a evaluación oficial.
-- **Evidencia:** [schema.prisma](../../backend/prisma/schema.prisma), [norma de evaluación](https://www.gob.pe/institucion/minedu/normas-legales/541161-094-2020-minedu).
+- **Evidencia:** [GradeRecord.js](../../backend/src/models/GradeRecord.js), [norma de evaluación](https://www.gob.pe/institucion/minedu/normas-legales/541161-094-2020-minedu).
 - **Evitar:** Llamarla acta o promedio oficial.
 
 ### 16. ¿Qué ocurre al desactivar un registro?
 - **Corta:** Se conserva para consulta histórica y se impiden nuevas asociaciones según la regla.
 - **Ampliada:** No hay borrado físico por la API ni desactivación en cascada; cancelar una matrícula conserva su fila.
-- **Evidencia:** [servicios académicos](../../backend/src/services/), [schema.prisma](../../backend/prisma/schema.prisma).
+- **Evidencia:** [módulos académicos](../../backend/src/modules/), [migraciones SQL](../../backend/database/migrations/).
 - **Evitar:** Confundir desactivación con eliminación de datos.
 
 ## Autenticación y autorización
@@ -146,8 +146,8 @@ Cada respuesta corta cabe en una exposición oral. La explicación aporta el mat
 - **Evidencia:** [vercel.json](../../frontend/vercel.json), [auditoría externa](../security/external-security-audit.md).
 - **Evitar:** Tratar el A+ de Observatory como certificación de seguridad integral.
 
-### 24. ¿Prisma elimina la inyección SQL?
-- **Corta:** Sus consultas tipadas reducen el riesgo, pero no autorizan descuidar SQL manual.
+### 24. ¿Sequelize elimina la inyección SQL?
+- **Corta:** Sus consultas parametrizadas reducen el riesgo, pero no autorizan descuidar SQL manual.
 - **Ampliada:** Se revisaron llamadas raw y payloads locales; añadir SQL concatenado o una llamada unsafe reintroduciría riesgo.
 - **Evidencia:** [auditoría de preparación](../security/production-readiness-audit.md), [prueba de contrato](../../backend/tests/integration/production-contract.integration.js).
 - **Evitar:** Afirmar inmunidad absoluta.

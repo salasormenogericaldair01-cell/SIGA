@@ -1,32 +1,40 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcrypt');
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { Transaction } = require('sequelize');
+const allModels = require('../../src/models');
 const { credentials, legacyEmails, prepare, retire, assertNoForbiddenLabels } = require('../../scripts/operations/data-transition');
 const { ROLES, emailDigest } = require('../../scripts/operations/data-transition-core');
 
+const { sequelize } = allModels;
+
 jest.setTimeout(120000);
-const prisma = new PrismaClient();
 const models = [
-  'user', 'educationLevel', 'grade', 'academicPeriod', 'section', 'student', 'teacher',
-  'course', 'teachingAssignment', 'enrollment', 'gradeRecord', 'attendanceRecord',
+  'User', 'EducationLevel', 'Grade', 'AcademicPeriod', 'Section', 'Student', 'Teacher',
+  'Course', 'TeachingAssignment', 'Enrollment', 'GradeRecord', 'AttendanceRecord',
 ];
-const day = (value) => new Date(`${value}T00:00:00.000Z`);
+const day = (value) => value;
 const undo = new Error('rollback intencional de registros exclusivos de esta prueba');
 
-async function verifyTestDestination(client = prisma) {
+async function verifyTestDestination(transaction) {
   const url = new URL(process.env.DATABASE_URL);
   if (!['postgres:', 'postgresql:'].includes(url.protocol)
     || url.hostname !== '127.0.0.1' || url.port !== '5433'
     || decodeURIComponent(url.pathname) !== '/siga_test') {
     throw new Error('Este ensayo solo admite siga_test en 127.0.0.1:5433');
   }
-  const [row] = await client.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await sequelize.query(
+    'SELECT current_database() AS name, inet_server_port() AS port',
+    transaction ? { transaction } : undefined,
+  );
+  const [row] = rows;
   if (row.name !== 'siga_test' || row.port !== 5433) throw new Error('El destino PostgreSQL de la prueba no coincide');
 }
 
-async function counts(client) {
+async function counts(transaction) {
   const result = {};
-  for (const model of models) result[model] = await client[model].count();
+  for (const model of models) {
+    result[model] = await allModels[model].count(transaction ? { transaction } : undefined);
+  }
   return result;
 }
 
@@ -45,12 +53,12 @@ function fixture() {
   return { people: credentials(env), legacy: legacyEmails(env) };
 }
 
-async function seedObservedGraph(tx, legacy) {
+async function seedObservedGraph(transaction, legacy) {
   const levels = {};
   const grades = {};
   for (const code of ['PRIMARIA', 'SECUNDARIA']) {
-    levels[code] = await tx.educationLevel.create({ data: { code, name: `DEMO ${code}` } });
-    grades[code] = await tx.grade.create({ data: { educationLevelId: levels[code].id, order: 1, name: 'DEMO 1.º' } });
+    levels[code] = await allModels.EducationLevel.create({ code, name: `DEMO ${code}` }, { transaction });
+    grades[code] = await allModels.Grade.create({ educationLevelId: levels[code].id, order: 1, name: 'DEMO 1.º' }, { transaction });
   }
   const userInfo = {
     ADMIN: ['Admin', 'ADMIN'], SECRETARIA: ['Secretaria', 'SECRETARIA'],
@@ -59,47 +67,45 @@ async function seedObservedGraph(tx, legacy) {
   };
   const users = {};
   for (const [key, [lastName, role]] of Object.entries(userInfo)) {
-    users[key] = await tx.user.create({ data: {
+    users[key] = await allModels.User.create({
       email: legacy[key], firstName: 'Demo', lastName, role,
       passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), 10),
-    } });
+    }, { transaction });
   }
-  const period = await tx.academicPeriod.create({ data: { name: 'DEMO 2026', startDate: day('2026-01-01'), endDate: day('2026-12-31') } });
+  const period = await allModels.AcademicPeriod.create({ name: 'DEMO 2026', startDate: day('2026-01-01'), endDate: day('2026-12-31') }, { transaction });
   for (const key of ['A', 'B']) {
     const levelCode = key === 'A' ? 'PRIMARIA' : 'SECUNDARIA';
-    const section = await tx.section.create({ data: { gradeId: grades[levelCode].id, academicPeriodId: period.id, name: `DEMO-${key}` } });
-    const teacher = await tx.teacher.create({ data: { userId: users[`DOCENTE_${key}`].id } });
-    const student = await tx.student.create({ data: {
+    const section = await allModels.Section.create({ gradeId: grades[levelCode].id, academicPeriodId: period.id, name: `DEMO-${key}` }, { transaction });
+    const teacher = await allModels.Teacher.create({ userId: users[`DOCENTE_${key}`].id }, { transaction });
+    const student = await allModels.Student.create({
       studentCode: `DEMO-EST-${key}`, firstName: 'Demo', lastName: `Estudiante ${key}`,
       birthDate: day(key === 'A' ? '2015-05-15' : '2012-05-15'), userId: users[`ESTUDIANTE_${key}`].id,
-    } });
-    const course = await tx.course.create({ data: { code: key === 'A' ? 'DEMO-MAT' : 'DEMO-COM', name: key === 'A' ? 'DEMO Matemática' : 'DEMO Comunicación' } });
-    const assignment = await tx.teachingAssignment.create({ data: { courseId: course.id, sectionId: section.id, teacherId: teacher.id } });
-    const enrollment = await tx.enrollment.create({ data: { studentId: student.id, sectionId: section.id, academicPeriodId: period.id } });
-    await tx.gradeRecord.create({ data: { teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, term: 1, value: key === 'A' ? 'A' : 'B' } });
-    await tx.attendanceRecord.create({ data: { teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, date: day('2026-10-01'), status: 'PRESENT' } });
+    }, { transaction });
+    const course = await allModels.Course.create({ code: key === 'A' ? 'DEMO-MAT' : 'DEMO-COM', name: key === 'A' ? 'DEMO Matemática' : 'DEMO Comunicación' }, { transaction });
+    const assignment = await allModels.TeachingAssignment.create({ courseId: course.id, sectionId: section.id, teacherId: teacher.id }, { transaction });
+    const enrollment = await allModels.Enrollment.create({ studentId: student.id, sectionId: section.id, academicPeriodId: period.id }, { transaction });
+    await allModels.GradeRecord.create({ teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, term: 1, value: key === 'A' ? 'A' : 'B' }, { transaction });
+    await allModels.AttendanceRecord.create({ teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, date: day('2026-10-01'), status: 'PRESENT' }, { transaction });
   }
   return { originalAdminId: users.ADMIN.id, originalLevelIds: Object.values(levels).map((item) => item.id), originalGradeIds: Object.values(grades).map((item) => item.id) };
 }
 
-async function proofFor(tx, people) {
+async function proofFor(transaction, people) {
   const now = new Date().toISOString();
   const roles = {};
   for (const [key, account] of Object.entries(people)) {
-    const user = await tx.user.findUnique({ where: { email: account.email } });
+    const user = await allModels.User.findOne({ where: { email: account.email }, transaction });
     expect(user.isActive).toBe(true);
     expect(user.role).toBe(ROLES[key][2]);
     expect(await bcrypt.compare(account.password, user.passwordHash)).toBe(true);
     roles[key] = { id: user.id, role: user.role, emailSha256: emailDigest(user.email), verifiedAt: now };
   }
-  // Es un comprobante simulado: el ensayo valida hashes y roles en PostgreSQL,
-  // pero no afirma haber llamado a la API publicada.
   return { database: 'siga_demo_egx3', verifiedAt: now, roles };
 }
 
 beforeAll(async () => {
   await verifyTestDestination();
-  const existing = await counts(prisma);
+  const existing = await counts();
   if (Object.values(existing).some((count) => count !== 0)) {
     throw new Error('siga_test contiene datos ajenos; el ensayo no escribirá ni los limpiará');
   }
@@ -108,67 +114,75 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     await verifyTestDestination();
-    expect(Object.values(await counts(prisma)).every((count) => count === 0)).toBe(true);
-  } finally { await prisma.$disconnect(); }
+    expect(Object.values(await counts()).every((count) => count === 0)).toBe(true);
+  } finally {
+    await sequelize.close();
+  }
 });
 
 test('grafo real: prepare, comprobación, retire, conteos e idempotencia; todo se revierte', async () => {
   const { people, legacy } = fixture();
   const hashes = Object.fromEntries(await Promise.all(Object.entries(people).map(async ([key, account]) => [key, await bcrypt.hash(account.password, 10)])));
   try {
-    await prisma.$transaction(async (tx) => {
+    await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (tx) => {
       await verifyTestDestination(tx);
       const original = await seedObservedGraph(tx, legacy);
       expect(Object.values(await counts(tx)).reduce((sum, count) => sum + count, 0)).toBe(27);
-      const prepared = await prepare(tx, people, hashes);
-      expect(await tx.educationLevel.count()).toBe(3);
-      expect(await tx.grade.count()).toBe(14);
-      expect(await tx.user.count()).toBe(12);
-      expect(await tx.user.count({ where: { id: original.originalAdminId, isActive: true, role: 'ADMIN' } })).toBe(1);
-      expect((await tx.educationLevel.findMany({ where: { code: { in: ['PRIMARIA', 'SECUNDARIA'] } } })).map((item) => item.id).sort()).toEqual(original.originalLevelIds.sort());
-      expect((await tx.grade.findMany({ where: { id: { in: original.originalGradeIds } } })).map((item) => item.id).sort()).toEqual(original.originalGradeIds.sort());
-      await expect(prepare(tx, people, hashes)).rejects.toThrow(/no se repite/);
-      await expect(retire(tx, people, {}, legacy)).rejects.toThrow(/Comprobación API/);
-      expect(await tx.user.count({ where: { id: original.originalAdminId } })).toBe(1);
+      const prepared = await prepare(tx, people, hashes, allModels);
+      expect(await allModels.EducationLevel.count({ transaction: tx })).toBe(3);
+      expect(await allModels.Grade.count({ transaction: tx })).toBe(14);
+      expect(await allModels.User.count({ transaction: tx })).toBe(12);
+      expect(await allModels.User.count({ where: { id: original.originalAdminId, isActive: true, role: 'ADMIN' }, transaction: tx })).toBe(1);
+      expect((await allModels.EducationLevel.findAll({ where: { code: ['PRIMARIA', 'SECUNDARIA'] }, transaction: tx })).map((item) => item.id).sort()).toEqual(original.originalLevelIds.sort());
+      expect((await allModels.Grade.findAll({ where: { id: original.originalGradeIds }, transaction: tx })).map((item) => item.id).sort()).toEqual(original.originalGradeIds.sort());
+      await expect(prepare(tx, people, hashes, allModels)).rejects.toThrow(/no se repite/);
+      await expect(retire(tx, people, {}, legacy, allModels)).rejects.toThrow(/Comprobación API/);
+      expect(await allModels.User.count({ where: { id: original.originalAdminId }, transaction: tx })).toBe(1);
       const proof = await proofFor(tx, people);
       expect(proof.roles.ADMIN.id).toBe(prepared.adminId);
-      await retire(tx, people, proof, legacy);
+      await retire(tx, people, proof, legacy, allModels);
       const final = await counts(tx);
-      expect(final).toMatchObject({ user: 6, educationLevel: 3, grade: 14, academicPeriod: 1, section: 2, student: 2, teacher: 2, course: 2, teachingAssignment: 2, enrollment: 2, gradeRecord: 2, attendanceRecord: 2 });
-      expect(await tx.user.count({ where: { id: original.originalAdminId } })).toBe(0);
-      expect(await tx.user.count({ where: { id: prepared.adminId, role: 'ADMIN', isActive: true } })).toBe(1);
-      await assertNoForbiddenLabels(tx);
-      const records = await tx.gradeRecord.findMany({ include: { teachingAssignment: true, enrollment: true } });
+      expect(final).toMatchObject({ User: 6, EducationLevel: 3, Grade: 14, AcademicPeriod: 1, Section: 2, Student: 2, Teacher: 2, Course: 2, TeachingAssignment: 2, Enrollment: 2, GradeRecord: 2, AttendanceRecord: 2 });
+      expect(await allModels.User.count({ where: { id: original.originalAdminId }, transaction: tx })).toBe(0);
+      expect(await allModels.User.count({ where: { id: prepared.adminId, role: 'ADMIN', isActive: true }, transaction: tx })).toBe(1);
+      await assertNoForbiddenLabels(tx, allModels);
+      const records = await allModels.GradeRecord.findAll({
+        include: [
+          { model: allModels.TeachingAssignment, as: 'teachingAssignment' },
+          { model: allModels.Enrollment, as: 'enrollment' },
+        ],
+        transaction: tx,
+      });
       for (const record of records) {
         expect(record.sectionId).toBe(record.teachingAssignment.sectionId);
         expect(record.sectionId).toBe(record.enrollment.sectionId);
       }
-      await expect(retire(tx, people, proof, legacy)).rejects.toThrow(/conjunto DEMO cambió/);
+      await expect(retire(tx, people, proof, legacy, allModels)).rejects.toThrow(/conjunto DEMO cambió/);
       throw undo;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120000 });
-  } catch (error) { if (error !== undo) throw error; }
-  expect(Object.values(await counts(prisma)).every((count) => count === 0)).toBe(true);
+    });
+  } catch (error) {
+    if (error !== undo) throw error;
+  }
+  expect(Object.values(await counts()).every((count) => count === 0)).toBe(true);
 });
 
 test('un fallo deliberado durante retire revierte las eliminaciones y las creaciones de la transacción', async () => {
   const { people, legacy } = fixture();
   const hashes = Object.fromEntries(await Promise.all(Object.entries(people).map(async ([key, account]) => [key, await bcrypt.hash(account.password, 10)])));
   const failure = new Error('fallo deliberado después de una eliminación');
-  await expect(prisma.$transaction(async (tx) => {
+  await expect(sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (tx) => {
     await verifyTestDestination(tx);
     await seedObservedGraph(tx, legacy);
-    await prepare(tx, people, hashes);
+    await prepare(tx, people, hashes, allModels);
     const proof = await proofFor(tx, people);
-    const failingTx = new Proxy(tx, {
-      get(target, property) {
-        if (property === 'gradeRecord') return {
-          findMany: (...args) => target.gradeRecord.findMany(...args),
-          deleteMany: async (...args) => { await target.gradeRecord.deleteMany(...args); throw failure; },
-        };
-        return target[property];
+    const failingModels = {
+      ...allModels,
+      GradeRecord: {
+        findAll: (...args) => allModels.GradeRecord.findAll(...args),
+        destroy: async (...args) => { await allModels.GradeRecord.destroy(...args); throw failure; },
       },
-    });
-    await retire(failingTx, people, proof, legacy);
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 120000 })).rejects.toBe(failure);
-  expect(Object.values(await counts(prisma)).every((count) => count === 0)).toBe(true);
+    };
+    await retire(tx, people, proof, legacy, failingModels);
+  })).rejects.toBe(failure);
+  expect(Object.values(await counts()).every((count) => count === 0)).toBe(true);
 });

@@ -1,7 +1,7 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const { sequelize, User, EducationLevel, Grade, AcademicPeriod, Section } = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -14,7 +14,7 @@ function auth(user) {
 }
 
 beforeAll(async () => {
-  const rows = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_addr()::text AS host, inet_server_port() AS port`;
+  const [rows] = await sequelize.query('SELECT current_database() AS name, inet_server_addr()::text AS host, inet_server_port() AS port');
   const url = new URL(process.env.DATABASE_URL);
   if (rows[0].name !== 'siga_test' || rows[0].port !== 5433 || !['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/siga_test') {
     throw new Error('La integración académica exige siga_test en localhost:5433');
@@ -24,21 +24,21 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (verified) {
-    await prisma.section.deleteMany({ where: { id: { in: ids.sections } } });
-    await prisma.grade.deleteMany({ where: { id: { in: ids.grades } } });
-    await prisma.academicPeriod.deleteMany({ where: { id: { in: ids.periods } } });
-    await prisma.educationLevel.deleteMany({ where: { id: { in: ids.levels } } });
-    await prisma.user.deleteMany({ where: { id: { in: ids.users } } });
+    if (ids.sections.length) await Section.destroy({ where: { id: ids.sections } });
+    if (ids.grades.length) await Grade.destroy({ where: { id: ids.grades } });
+    if (ids.periods.length) await AcademicPeriod.destroy({ where: { id: ids.periods } });
+    if (ids.levels.length) await EducationLevel.destroy({ where: { id: ids.levels } });
+    if (ids.users.length) await User.destroy({ where: { id: ids.users } });
   }
-  await prisma.$disconnect();
+  await sequelize.close();
 });
 
 test('PostgreSQL real: permisos, nivel → grado → periodo → sección, duplicados, filtros e inactivos', async () => {
-  const admin = await prisma.user.create({ data: { email: `admin-academic-${randomUUID()}@test.edu`, passwordHash: 'no-login', firstName: 'Admin', lastName: 'Test', role: 'ADMIN' } });
+  const admin = await User.create({ email: `admin-academic-${randomUUID()}@test.edu`, passwordHash: 'no-login', firstName: 'Admin', lastName: 'Test', role: 'ADMIN' });
   ids.users.push(admin.id);
-  const secretary = await prisma.user.create({ data: { email: `secretary-academic-${randomUUID()}@test.edu`, passwordHash: 'no-login', firstName: 'Secretaria', lastName: 'Test', role: 'SECRETARIA' } });
+  const secretary = await User.create({ email: `secretary-academic-${randomUUID()}@test.edu`, passwordHash: 'no-login', firstName: 'Secretaria', lastName: 'Test', role: 'SECRETARIA' });
   ids.users.push(secretary.id);
-  const teacher = await prisma.user.create({ data: { email: `teacher-academic-${randomUUID()}@test.edu`, passwordHash: 'no-login', firstName: 'Docente', lastName: 'Test', role: 'DOCENTE' } });
+  const teacher = await User.create({ email: `teacher-academic-${randomUUID()}@test.edu`, passwordHash: 'no-login', firstName: 'Docente', lastName: 'Test', role: 'DOCENTE' });
   ids.users.push(teacher.id);
 
   await request(app).get('/api/education-levels').expect(401);
@@ -84,5 +84,5 @@ test('PostgreSQL real: permisos, nivel → grado → periodo → sección, dupli
   await request(app).post('/api/sections').set('Authorization', auth(admin))
     .send({ gradeId: grade.body.item.id, academicPeriodId: period.body.item.id, name: 'B' }).expect(400);
   await request(app).get(`/api/sections/${section.body.item.id}`).set('Authorization', auth(admin)).expect(200);
-  expect(await prisma.section.count({ where: { id: section.body.item.id } })).toBe(1);
+  expect(await Section.count({ where: { id: section.body.item.id } })).toBe(1);
 });

@@ -31,9 +31,13 @@ function targetFromEnvironment(env) {
   return { hostname: url.hostname, username: decodeURIComponent(url.username), password: decodeURIComponent(url.password), database: DATABASE };
 }
 
-async function verifyDatabase(prisma, env) {
+async function verifyDatabase(db, env, transaction) {
   const target = targetFromEnvironment(env);
-  const [row] = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await db.query(
+    'SELECT current_database() AS name, inet_server_port() AS port',
+    transaction ? { transaction } : undefined,
+  );
+  const [row] = rows;
   if (row?.name !== DATABASE || row?.port !== 5432) throw new ControlledError('El servidor PostgreSQL no coincide con el destino beta');
   return target;
 }

@@ -1,10 +1,39 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomBytes, randomUUID } = require('node:crypto');
-const { backendRequire, prisma, verifyLocalTestDatabase } = require('./target.cjs');
+const { backendRequire, models, sequelize, verifyLocalTestDatabase } = require('./target.cjs');
 
 const bcrypt = backendRequire('bcrypt');
 const { passwordSchema } = backendRequire('./src/modules/auth/auth.validator');
+const {
+  User,
+  Teacher,
+  Student,
+  EducationLevel,
+  Grade,
+  AcademicPeriod,
+  Section,
+  Course,
+  TeachingAssignment,
+  Enrollment,
+  GradeRecord,
+  AttendanceRecord,
+} = models;
+const modelByKind = {
+  user: User,
+  teacher: Teacher,
+  student: Student,
+  educationLevel: EducationLevel,
+  grade: Grade,
+  academicPeriod: AcademicPeriod,
+  section: Section,
+  course: Course,
+  teachingAssignment: TeachingAssignment,
+  enrollment: Enrollment,
+  gradeRecord: GradeRecord,
+  attendanceRecord: AttendanceRecord,
+};
+
 const output = path.resolve(__dirname, 'results');
 const manifestFile = path.join(output, 'fixture.json');
 const tokenFile = path.join(output, 'tokens.json');
@@ -29,43 +58,67 @@ async function prepare() {
   const year = Number(today.slice(0, 4));
   const accounts = {};
 
-  const assignmentId = await prisma.$transaction(async (tx) => {
-    let grade = await tx.grade.findFirst({ where: { isActive: true, educationLevel: { isActive: true } } });
+  const assignmentId = await sequelize.transaction(async (transaction) => {
+    let grade = await Grade.findOne({
+      where: { isActive: true },
+      include: [{ model: EducationLevel, as: 'educationLevel', where: { isActive: true }, required: true }],
+      transaction,
+    });
     if (!grade) {
-      let level = await tx.educationLevel.findFirst({ where: { isActive: true }, include: { grades: true } });
+      let level = await EducationLevel.findOne({
+        where: { isActive: true },
+        include: [{ model: Grade, as: 'grades' }],
+        transaction,
+      });
       if (!level) {
-        const existing = await tx.educationLevel.findMany({ select: { code: true } });
+        const existing = await EducationLevel.findAll({ attributes: ['code'], raw: true, transaction });
         const code = ['INICIAL', 'PRIMARIA', 'SECUNDARIA'].find((item) => !existing.some((row) => row.code === item));
         if (!code) throw new Error('No hay nivel activo ni código libre');
-        level = remember(ids, 'educationLevel', await tx.educationLevel.create({ data: { code, name: prefix }, include: { grades: true } }));
+        level = remember(ids, 'educationLevel', await EducationLevel.create({ code, name: prefix }, { transaction }));
+        level.grades = [];
       }
       const range = level.code === 'INICIAL' ? [3, 4, 5] : level.code === 'PRIMARIA' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
-      const order = range.find((number) => !level.grades.some((row) => row.order === number));
+      const order = range.find((number) => !(level.grades || []).some((row) => row.order === number));
       if (!order) throw new Error('No hay grado activo ni orden libre');
-      grade = remember(ids, 'grade', await tx.grade.create({ data: { educationLevelId: level.id, order, name: prefix } }));
+      grade = remember(ids, 'grade', await Grade.create({ educationLevelId: level.id, order, name: prefix }, { transaction }));
     }
     for (const role of ['ADMIN', 'DOCENTE', 'ESTUDIANTE']) {
       const email = `${prefix.toLowerCase()}-${role.toLowerCase()}@performance.invalid`;
-      const user = remember(ids, 'user', await tx.user.create({ data: {
-        email, passwordHash: hashes[role], firstName: 'Rendimiento', lastName: role, role,
-      } }));
+      const user = remember(ids, 'user', await User.create(
+        { email, passwordHash: hashes[role], firstName: 'Rendimiento', lastName: role, role },
+        { transaction },
+      ));
       accounts[role] = { email, id: user.id };
     }
-    const teacher = remember(ids, 'teacher', await tx.teacher.create({ data: { userId: accounts.DOCENTE.id } }));
-    const student = remember(ids, 'student', await tx.student.create({ data: {
-      studentCode: prefix, firstName: 'Estudiante', lastName: 'Temporal', birthDate: new Date('2012-01-01'), userId: accounts.ESTUDIANTE.id,
-    } }));
-    const period = remember(ids, 'academicPeriod', await tx.academicPeriod.create({ data: {
-      name: prefix, startDate: new Date(`${year}-01-01T00:00:00.000Z`), endDate: new Date(`${year}-12-31T00:00:00.000Z`),
-    } }));
-    const section = remember(ids, 'section', await tx.section.create({ data: { gradeId: grade.id, academicPeriodId: period.id, name: 'P' } }));
-    const course = remember(ids, 'course', await tx.course.create({ data: { code: prefix, name: 'Curso temporal de rendimiento' } }));
-    const assignment = remember(ids, 'teachingAssignment', await tx.teachingAssignment.create({ data: { courseId: course.id, sectionId: section.id, teacherId: teacher.id } }));
-    const enrollment = remember(ids, 'enrollment', await tx.enrollment.create({ data: { studentId: student.id, sectionId: section.id, academicPeriodId: period.id } }));
-    remember(ids, 'gradeRecord', await tx.gradeRecord.create({ data: { teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, term: 1, value: 'A' } }));
-    remember(ids, 'attendanceRecord', await tx.attendanceRecord.create({ data: { teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, date: new Date(`${today}T00:00:00.000Z`), status: 'PRESENT' } }));
+    const teacher = remember(ids, 'teacher', await Teacher.create({ userId: accounts.DOCENTE.id }, { transaction }));
+    const student = remember(ids, 'student', await Student.create(
+      { studentCode: prefix, firstName: 'Estudiante', lastName: 'Temporal', birthDate: '2012-01-01', userId: accounts.ESTUDIANTE.id },
+      { transaction },
+    ));
+    const period = remember(ids, 'academicPeriod', await AcademicPeriod.create(
+      { name: prefix, startDate: `${year}-01-01`, endDate: `${year}-12-31` },
+      { transaction },
+    ));
+    const section = remember(ids, 'section', await Section.create({ gradeId: grade.id, academicPeriodId: period.id, name: 'P' }, { transaction }));
+    const course = remember(ids, 'course', await Course.create({ code: prefix, name: 'Curso temporal de rendimiento' }, { transaction }));
+    const assignment = remember(ids, 'teachingAssignment', await TeachingAssignment.create(
+      { courseId: course.id, sectionId: section.id, teacherId: teacher.id },
+      { transaction },
+    ));
+    const enrollment = remember(ids, 'enrollment', await Enrollment.create(
+      { studentId: student.id, sectionId: section.id, academicPeriodId: period.id },
+      { transaction },
+    ));
+    remember(ids, 'gradeRecord', await GradeRecord.create(
+      { teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, term: 1, value: 'A' },
+      { transaction },
+    ));
+    remember(ids, 'attendanceRecord', await AttendanceRecord.create(
+      { teachingAssignmentId: assignment.id, enrollmentId: enrollment.id, sectionId: section.id, date: today, status: 'PRESENT' },
+      { transaction },
+    ));
     return assignment.id;
-  }, { maxWait: 10000, timeout: 120000 });
+  });
 
   fs.mkdirSync(output, { recursive: true });
   const manifest = { run, prefix, ids, assignmentId, createdAt: new Date().toISOString() };
@@ -95,10 +148,10 @@ async function cleanup() {
     throw new Error('Manifiesto local inválido; no se limpiará nada');
   }
   const { ids, prefix } = manifest;
-  await prisma.$transaction(async (tx) => {
+  await sequelize.transaction(async (transaction) => {
     const rows = {};
     for (const kind of kinds) {
-      rows[kind] = await tx[kind].findMany({ where: { id: { in: ids[kind] } } });
+      rows[kind] = await modelByKind[kind].findAll({ where: { id: ids[kind] }, transaction });
       if (rows[kind].length !== ids[kind].length || new Set(ids[kind]).size !== ids[kind].length) throw new Error(`IDs ${kind} inconsistentes`);
     }
     if (rows.user.some((row) => !row.email.startsWith(`${prefix.toLowerCase()}-`))
@@ -116,12 +169,12 @@ async function cleanup() {
     }
     for (const kind of deleteOrder) {
       if (!ids[kind].length) continue;
-      const deleted = await tx[kind].deleteMany({ where: { id: { in: ids[kind] } } });
-      if (deleted.count !== ids[kind].length) throw new Error(`Limpieza incompleta de ${kind}`);
+      const deleted = await modelByKind[kind].destroy({ where: { id: ids[kind] }, transaction });
+      if (deleted !== ids[kind].length) throw new Error(`Limpieza incompleta de ${kind}`);
     }
-  }, { maxWait: 10000, timeout: 120000 });
+  });
   for (const kind of kinds) {
-    if (await prisma[kind].count({ where: { id: { in: ids[kind] } } }) !== 0) throw new Error(`Persisten IDs ${kind}`);
+    if (await modelByKind[kind].count({ where: { id: ids[kind] } }) !== 0) throw new Error(`Persisten IDs ${kind}`);
   }
   if (fs.existsSync(tokenFile)) fs.unlinkSync(tokenFile);
   fs.unlinkSync(manifestFile);
@@ -137,4 +190,4 @@ async function main() {
 }
 
 main().catch((error) => { console.error(`Operación local no completada: ${error.message}`); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => sequelize.close());

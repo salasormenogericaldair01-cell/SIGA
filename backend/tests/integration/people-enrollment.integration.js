@@ -1,7 +1,17 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const {
+  sequelize,
+  User,
+  EducationLevel,
+  Grade,
+  AcademicPeriod,
+  Section,
+  Student,
+  Teacher,
+  Enrollment,
+} = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -23,17 +33,17 @@ function call(method, path, user, body) {
   return body === undefined ? req : req.send(body);
 }
 async function makeUser(role, isActive = true) {
-  const user = await prisma.user.create({ data: {
+  const user = await User.create({
     email: `sprint3-${randomUUID()}@test.edu`, passwordHash: 'integration-test-only',
     firstName: role, lastName: 'Prueba', role, isActive,
-  } });
+  });
   ids.users.push(user.id);
   return user;
 }
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL);
-  const target = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [target] = await sequelize.query('SELECT current_database() AS name, inet_server_port() AS port');
   if (target[0].name !== 'siga_test' || target[0].port !== 5433 ||
       !['127.0.0.1', 'localhost'].includes(url.hostname) || url.pathname !== '/siga_test') {
     throw new Error('Integración Sprint 3 requiere siga_test en localhost:5433');
@@ -45,36 +55,36 @@ beforeAll(async () => {
   studentUser = await makeUser('ESTUDIANTE');
   inactiveUser = await makeUser('ESTUDIANTE', false);
   inactiveTeacherUser = await makeUser('DOCENTE', false);
-  const level = await prisma.educationLevel.create({ data: { code: 'SECUNDARIA', name: 'Secundaria' } });
+  const level = await EducationLevel.create({ code: 'SECUNDARIA', name: 'Secundaria' });
   ids.levels.push(level.id);
-  const grade = await prisma.grade.create({ data: { educationLevelId: level.id, name: 'Primero', order: 1 } });
+  const grade = await Grade.create({ educationLevelId: level.id, name: 'Primero', order: 1 });
   ids.grades.push(grade.id);
-  const p1 = await prisma.academicPeriod.create({ data: { name: `P-${randomUUID()}`, startDate: new Date('2026-03-01'), endDate: new Date('2026-12-01') } });
+  const p1 = await AcademicPeriod.create({ name: `P-${randomUUID()}`, startDate: '2026-03-01', endDate: '2026-12-01' });
   ids.periods.push(p1.id);
-  const p2 = await prisma.academicPeriod.create({ data: { name: `P-${randomUUID()}`, startDate: new Date('2027-03-01'), endDate: new Date('2027-12-01') } });
+  const p2 = await AcademicPeriod.create({ name: `P-${randomUUID()}`, startDate: '2027-03-01', endDate: '2027-12-01' });
   ids.periods.push(p2.id);
   sections = {};
   for (const [key, periodId, name, isActive] of [
     ['first', p1.id, 'A', true], ['transfer', p1.id, 'B', true],
     ['inactive', p1.id, 'C', false], ['next', p2.id, 'A', true],
   ]) {
-    sections[key] = await prisma.section.create({ data: { gradeId: grade.id, academicPeriodId: periodId, name, isActive } });
+    sections[key] = await Section.create({ gradeId: grade.id, academicPeriodId: periodId, name, isActive });
     ids.sections.push(sections[key].id);
   }
 });
 
 afterAll(async () => {
   if (verified) {
-    await prisma.enrollment.deleteMany({ where: { id: { in: ids.enrollments } } });
-    await prisma.teacher.deleteMany({ where: { id: { in: ids.teachers } } });
-    await prisma.student.deleteMany({ where: { id: { in: ids.students } } });
-    await prisma.section.deleteMany({ where: { id: { in: ids.sections } } });
-    await prisma.grade.deleteMany({ where: { id: { in: ids.grades } } });
-    await prisma.academicPeriod.deleteMany({ where: { id: { in: ids.periods } } });
-    await prisma.educationLevel.deleteMany({ where: { id: { in: ids.levels } } });
-    await prisma.user.deleteMany({ where: { id: { in: ids.users } } });
+    if (ids.enrollments.length) await Enrollment.destroy({ where: { id: ids.enrollments } });
+    if (ids.teachers.length) await Teacher.destroy({ where: { id: ids.teachers } });
+    if (ids.students.length) await Student.destroy({ where: { id: ids.students } });
+    if (ids.sections.length) await Section.destroy({ where: { id: ids.sections } });
+    if (ids.grades.length) await Grade.destroy({ where: { id: ids.grades } });
+    if (ids.periods.length) await AcademicPeriod.destroy({ where: { id: ids.periods } });
+    if (ids.levels.length) await EducationLevel.destroy({ where: { id: ids.levels } });
+    if (ids.users.length) await User.destroy({ where: { id: ids.users } });
   }
-  await prisma.$disconnect();
+  await sequelize.close();
 });
 
 test('PostgreSQL real: perfiles, matrícula, permisos, filtros, conflictos y FK compuesta', async () => {
@@ -121,19 +131,19 @@ test('PostgreSQL real: perfiles, matrícula, permisos, filtros, conflictos y FK 
   await call('get', `/api/teachers?search=${teacherUser.email}&page=1&limit=20`, secretary).expect(200);
   await call('patch', `/api/teachers/${teacher.body.data.id}`, secretary, { isActive: false }).expect(403);
   await call('patch', `/api/teachers/${teacher.body.data.id}`, admin, { isActive: false }).expect(200);
-  expect((await prisma.user.findUnique({ where: { id: teacherUser.id } })).isActive).toBe(true);
+  expect((await User.findByPk(teacherUser.id)).isActive).toBe(true);
 
   await call('post', '/api/enrollments', secretary, { studentId: student.id, sectionId: sections.inactive.id }).expect(409);
-  await prisma.grade.update({ where: { id: sections.first.gradeId }, data: { isActive: false } });
+  await Grade.update({ isActive: false }, { where: { id: sections.first.gradeId } });
   await call('post', '/api/enrollments', secretary, { studentId: student.id, sectionId: sections.first.id }).expect(409);
-  await prisma.grade.update({ where: { id: sections.first.gradeId }, data: { isActive: true } });
-  const levelId = (await prisma.grade.findUnique({ where: { id: sections.first.gradeId } })).educationLevelId;
-  await prisma.educationLevel.update({ where: { id: levelId }, data: { isActive: false } });
+  await Grade.update({ isActive: true }, { where: { id: sections.first.gradeId } });
+  const levelId = (await Grade.findByPk(sections.first.gradeId)).educationLevelId;
+  await EducationLevel.update({ isActive: false }, { where: { id: levelId } });
   await call('post', '/api/enrollments', secretary, { studentId: student.id, sectionId: sections.first.id }).expect(409);
-  await prisma.educationLevel.update({ where: { id: levelId }, data: { isActive: true } });
-  await prisma.academicPeriod.update({ where: { id: sections.first.academicPeriodId }, data: { isActive: false } });
+  await EducationLevel.update({ isActive: true }, { where: { id: levelId } });
+  await AcademicPeriod.update({ isActive: false }, { where: { id: sections.first.academicPeriodId } });
   await call('post', '/api/enrollments', secretary, { studentId: student.id, sectionId: sections.first.id }).expect(409);
-  await prisma.academicPeriod.update({ where: { id: sections.first.academicPeriodId }, data: { isActive: true } });
+  await AcademicPeriod.update({ isActive: true }, { where: { id: sections.first.academicPeriodId } });
   const enrollment = await call('post', '/api/enrollments', secretary, { studentId: student.id, sectionId: sections.first.id }).expect(201);
   ids.enrollments.push(enrollment.body.data.id);
   expect(enrollment.body.data.academicPeriodId).toBe(sections.first.academicPeriodId);
@@ -151,14 +161,14 @@ test('PostgreSQL real: perfiles, matrícula, permisos, filtros, conflictos y FK 
   ids.enrollments.push(nextEnrollment.body.data.id);
   const filtered = await call('get', `/api/enrollments?studentId=${student.id}&status=ACTIVE&page=1&limit=1`, secretary).expect(200);
   expect(filtered.body.pagination).toMatchObject({ total: 2, totalPages: 2 });
-  await expect(prisma.enrollment.create({ data: {
+  await expect(Enrollment.create({
     studentId: second.body.data.id,
     sectionId: sections.first.id,
     academicPeriodId: sections.next.academicPeriodId,
-  } })).rejects.toMatchObject({ code: 'P2003' });
+  })).rejects.toMatchObject({ name: 'SequelizeForeignKeyConstraintError' });
 
   await call('patch', `/api/students/${student.id}`, admin, { isActive: false }).expect(200);
-  expect(await prisma.enrollment.count({ where: { studentId: student.id } })).toBe(2);
+  expect(await Enrollment.count({ where: { studentId: student.id } })).toBe(2);
   await call('patch', `/api/enrollments/${enrollment.body.data.id}`, admin, { status: 'CANCELLED' }).expect(200);
   await call('patch', `/api/enrollments/${enrollment.body.data.id}`, admin, { status: 'ACTIVE' }).expect(409);
 });

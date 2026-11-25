@@ -208,15 +208,19 @@ test('seed académico es idempotente y conserva cambios previos', async () => {
   const saved = new Map([['INICIAL', { id: id(), code: 'INICIAL', name: 'Nombre propio', isActive: false }]]);
   const grades = new Map();
   const db = {
-    educationLevel: { upsert: jest.fn(async ({ where, create }) => {
-      if (!saved.has(where.code)) saved.set(where.code, { id: id(), ...create, isActive: true });
-      return saved.get(where.code);
-    }) },
-    grade: { upsert: jest.fn(async ({ where, create }) => {
-      const key = `${where.educationLevelId_order.educationLevelId}-${where.educationLevelId_order.order}`;
-      if (!grades.has(key)) grades.set(key, { id: id(), ...create, isActive: true });
-      return grades.get(key);
-    }) },
+    EducationLevel: {
+      findOrCreate: jest.fn(async ({ where, defaults }) => {
+        if (!saved.has(where.code)) saved.set(where.code, { id: id(), ...defaults, isActive: true });
+        return [saved.get(where.code), false];
+      }),
+    },
+    Grade: {
+      findOrCreate: jest.fn(async ({ where, defaults }) => {
+        const key = `${where.educationLevelId}-${where.order}`;
+        if (!grades.has(key)) grades.set(key, { id: id(), ...defaults, isActive: true });
+        return [grades.get(key), false];
+      }),
+    },
   };
   await seedAcademic(db);
   const first = [...grades.values()].find((g) => g.educationLevelId === saved.get('INICIAL').id);

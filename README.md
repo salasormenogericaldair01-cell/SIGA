@@ -4,7 +4,7 @@ Proyecto académico del curso de Seguridad Informática. El backend incluye usua
 
 ## Stack y estructura
 
-JavaScript CommonJS, Node.js 24, Express 5, PostgreSQL, Prisma 6, Zod, bcrypt y JWT. Jest y Supertest para pruebas. `backend/src/app.js` configura Express sin abrir un puerto; `server.js` inicia el servidor. Las rutas llaman a controladores, los controladores a servicios y los middlewares protegen las rutas.
+JavaScript CommonJS, Node.js 24, Express 5, PostgreSQL, Sequelize 6, Zod, bcrypt y JWT. Jest y Supertest para pruebas. `backend/src/app.js` configura Express sin abrir un puerto; `server.js` inicia el servidor. Las rutas llaman a controladores, los controladores a servicios y los middlewares protegen las rutas.
 
 ## Configurar y ejecutar
 
@@ -13,7 +13,7 @@ Desde `backend/`:
 ```powershell
 npm ci
 Copy-Item .env.example .env
-npm run prisma:generate
+npm run db:migrate
 npm run dev
 ```
 
@@ -23,7 +23,7 @@ Editar `.env` con una URL real de **PostgreSQL**, un `JWT_SECRET` aleatorio de a
 
 ## Bases de datos y migraciones
 
-El esquema define usuarios, estructura académica, perfiles, matrículas, cursos, asignaciones, `GradeRecord` y `AttendanceRecord`. Las migraciones aditivas están en `backend/prisma/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
+El esquema define usuarios, estructura académica, perfiles, matrículas, cursos, asignaciones, `GradeRecord` y `AttendanceRecord`. Las migraciones SQL aditivas están en `backend/database/migrations/`. Usar `siga` para desarrollo y `siga_test` para integración; no ejecutar tests de integración sobre desarrollo.
 
 Si se autoriza crear ambas bases nuevas en el PostgreSQL local de Windows, estos comandos solicitan la contraseña interactivamente y no la guardan en el repositorio:
 
@@ -35,12 +35,10 @@ Si se autoriza crear ambas bases nuevas en el PostgreSQL local de Windows, estos
 Una vez creadas las bases y configurada `DATABASE_URL` en `.env`:
 
 ```powershell
-npm run prisma:validate
-npm run prisma:migrate
-npm run prisma:generate
+npm run db:migrate
 ```
 
-`prisma:migrate` ejecuta `prisma migrate deploy` sobre **la base indicada por `DATABASE_URL`**. Para migrar la base de pruebas, configurar temporalmente `DATABASE_URL` con la URL de `siga_test` y ejecutar el mismo comando; comprobar el destino antes de hacerlo. No se requiere borrar ni resetear esquemas.
+`db:migrate` ejecuta los scripts SQL pendientes de `backend/database/migrations/` sobre **la base indicada por `DATABASE_URL`**. Para migrar la base de pruebas, configurar temporalmente `DATABASE_URL` con la URL de `siga_test` y ejecutar el mismo comando; comprobar el destino antes de hacerlo. No se requiere borrar ni resetear esquemas.
 
 ## Primer ADMIN
 
@@ -95,13 +93,11 @@ El seed académico es **manual** e idempotente: crea solo los tres niveles y sus
 npm run seed:academic
 ```
 
-Para verificar el estado de las migraciones:
+Para verificar el estado de las migraciones aplicadas en PostgreSQL, consultar la tabla `schema_migrations`:
 
-```powershell
-npx prisma migrate status
+```sql
+SELECT name, "appliedAt" FROM schema_migrations ORDER BY name;
 ```
-
-Repetir el comando con `DATABASE_URL` apuntando a `siga_test` para consultar esa base; el comando no aplica migraciones.
 
 ## Pruebas y seguridad
 
@@ -110,7 +106,7 @@ npm test
 npm audit
 ```
 
-`npm test` ejecuta Sprint 0 y pruebas HTTP con Prisma simulado; no demuestra una conexión real. Para probar PostgreSQL real, definir `TEST_DATABASE_URL` hacia la base separada **`siga_test`**, aplicar allí las migraciones y ejecutar:
+`npm test` ejecuta Sprint 0 y pruebas HTTP con modelos Sequelize simulados; no demuestra una conexión real. Para probar PostgreSQL real, definir `TEST_DATABASE_URL` hacia la base separada **`siga_test`**, aplicar allí las migraciones y ejecutar:
 
 ```powershell
 npm run test:integration
@@ -119,8 +115,6 @@ npm run test:integration
 El runner rechaza URLs que no apunten a `siga_test`; cada prueba confirma `current_database()` antes de escribir y limpia únicamente sus propios registros. La prueba del seed académico revierte todos sus cambios mediante una transacción. Si la base no está preparada, el comando falla explícitamente. Helmet, CORS de origen explícito, límite JSON de 100 kB, manejo seguro de errores y rate limit protegen las rutas; CORS no sustituye la autenticación.
 
 El login usa dos contadores independientes en memoria: cinco fallos por correo normalizado y treinta fallos por IP efectiva de Express, ambos en quince minutos. Un correo con formato inválido usa la IP también como clave del primer contador. El quinto y el trigésimo fallo aún reciben la respuesta normal de credenciales; la solicitud siguiente recibe un único 429 genérico con `Retry-After` del límite que la rechazó. Un acceso correcto ordinario no consume ninguno de los contadores, pero durante cualquier bloqueo también recibe 429. Localmente `TRUST_PROXY_HOPS=0`; en Render se configura `1` para confiar solo en el proxy inmediato. La memoria se vacía al reiniciar y no se comparte entre instancias. El bloqueo por cuenta puede ser usado por un tercero para impedir temporalmente el acceso de esa cuenta; un almacenamiento compartido y controles adicionales de abuso requieren una etapa separada.
-
-`package.json` aplica un `override` limitado de `deepmerge-ts` 8.0.0 dentro de Prisma por [GHSA-ggr8-5vv4-36mx](https://github.com/advisories/GHSA-ggr8-5vv4-36mx). Volver a verificar este ajuste al actualizar Prisma.
 
 ## Perfiles y matrículas
 

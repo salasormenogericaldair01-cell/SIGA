@@ -10,22 +10,22 @@ Están implementados usuarios y perfiles, estructura académica, matrículas, cu
 
 ## B. Arquitectura y despliegue
 
-React con Vite presenta formularios y rutas por rol. Un cliente HTTP centralizado envía peticiones JSON a Express. Las rutas aplican autenticación, autorización y validación Zod; controladores y servicios ejecutan reglas de negocio; Prisma consulta PostgreSQL. El navegador nunca recibe una conexión a la base. El frontend se aloja en Vercel y el backend en Render, con PostgreSQL separado. En desarrollo pueden ejecutarse frontend, API y PostgreSQL localmente; la base siga_test se reserva para pruebas con escritura.
+React con Vite presenta formularios y rutas por rol. Un cliente HTTP centralizado envía peticiones JSON a Express. Las rutas aplican autenticación, autorización y validación Zod; controladores y servicios ejecutan reglas de negocio; Sequelize consulta PostgreSQL. El navegador nunca recibe una conexión a la base. El frontend se aloja en Vercel y el backend en Render, con PostgreSQL separado. En desarrollo pueden ejecutarse frontend, API y PostgreSQL localmente; la base siga_test se reserva para pruebas con escritura.
 
 ~~~mermaid
 flowchart LR
     N[Navegador] --> F[React y Vite<br/>Vercel o local]
     F -->|HTTPS y JSON| A[API Express<br/>Render o local]
     A --> V[Validación y servicios]
-    V --> P[Prisma]
+    V --> P[Sequelize]
     P --> D[(PostgreSQL)]
 ~~~
 
-La URL pública de la API se incorpora al build mediante VITE_API_URL; secretos como DATABASE_URL y JWT_SECRET solo pertenecen al backend. El frontend coloca un SHA corto en el metadato siga-build; la API devuelve version en GET /api/health. Ambos pueden mostrar commits distintos si un cambio solo afecta a uno. Un valor unknown indica que el build no recibió un SHA válido, no que la API esté caída. Véanse [buildVersion.js](../../frontend/src/utils/buildVersion.js), [health.controller.js](../../backend/src/controllers/health.controller.js) y la [guía de despliegue](../operations/deployment.md).
+La URL pública de la API se incorpora al build mediante VITE_API_URL; secretos como DATABASE_URL y JWT_SECRET solo pertenecen al backend. El frontend coloca un SHA corto en el metadato siga-build; la API devuelve version en GET /api/health. Ambos pueden mostrar commits distintos si un cambio solo afecta a uno. Un valor unknown indica que el build no recibió un SHA válido, no que la API esté caída. Véanse [buildVersion.js](../../frontend/src/utils/buildVersion.js), [health.controller.js](../../backend/src/modules/health/health.controller.js) y la [guía de despliegue](../operations/deployment.md).
 
 ## C. Modelo de datos e integridad
 
-Los 12 modelos usan UUID como clave primaria; todos tienen createdAt y updatedAt. Un UUID identifica una fila, pero **no concede permiso** para leerla. El [esquema Prisma](../../backend/prisma/schema.prisma) declara claves foráneas y únicas que PostgreSQL también aplica.
+Los 12 modelos usan UUID como clave primaria; todos tienen createdAt y updatedAt. Un UUID identifica una fila, pero **no concede permiso** para leerla. Los [modelos Sequelize](../../backend/src/models/) y las [migraciones SQL](../../backend/database/migrations/) declaran claves foráneas y únicas que PostgreSQL aplica.
 
 | Entidad | Qué representa y relaciones relevantes | Unicidad o restricción principal |
 | --- | --- | --- |
@@ -86,7 +86,7 @@ Para una demostración, usar cuentas controladas y datos ficticios; evitar cambi
 | **sessionStorage:** el token dura una pestaña/sesión del navegador y sobrevive a su recarga. | [AuthContext.jsx](../../frontend/src/auth/AuthContext.jsx). | JavaScript de la misma página puede leerlo ante XSS. Evaluar cookies HttpOnly con protección CSRF y modelo de sesiones adecuado. |
 | **CSP obligatoria y Helmet:** restringen recursos del documento y añaden cabeceras HTTP; CORS limita el origen de navegador configurado. | [vercel.json](../../frontend/vercel.json), [app.js](../../backend/src/app.js), [auditoría externa](../security/external-security-audit.md). | CSP y CORS no impiden por sí solos abusos de una API; revisar cada recurso nuevo y no confundir CORS con autorización. |
 | **Rate limiting y trust proxy:** login y cambio de contraseña limitados; 0 saltos localmente, 1 en Render confirmado manualmente. | [auth.routes.js](../../backend/src/routes/auth.routes.js), [env.js](../../backend/src/config/env.js), [pruebas de proxy](../../backend/tests/unit/trust-proxy.test.js). | Contador en memoria se reinicia y no se comparte entre instancias; la topología pública exacta no se demostró. |
-| **Zod estricto, Prisma y PostgreSQL:** rechazan campos inesperados y tipos inválidos; consultas tipadas y restricciones de base evitan varias incoherencias. | [validadores](../../backend/src/validators/), [schema.prisma](../../backend/prisma/schema.prisma), [prueba de contrato](../../backend/tests/integration/production-contract.integration.js). | Prisma no inmuniza cualquier SQL escrito a mano; revisar consultas raw y mantener pruebas de inyección. |
+| **Zod estricto, Sequelize y PostgreSQL:** rechazan campos inesperados y tipos inválidos; consultas parametrizadas y restricciones de base evitan varias incoherencias. | [validadores](../../backend/src/modules/), [modelos Sequelize](../../backend/src/models/), [prueba de contrato](../../backend/tests/integration/production-contract.integration.js). | Sequelize no inmuniza cualquier SQL escrito a mano; revisar consultas raw y mantener pruebas de inyección. |
 | **Alcance por recurso:** un UUID de otra persona no autoriza leer o editar su registro. | [record-access.service.js](../../backend/src/services/record-access.service.js), [integración de registros](../../backend/tests/integration/course-record.integration.js). | Repetir pruebas BOLA/IDOR al agregar rutas y filtros. |
 | **Respuestas y secretos:** rutas /api/auth con Cache-Control: no-store; sin hash en JSON; errores 500 genéricos; Gitleaks y variables de entorno ignoradas por Git. | [auth.routes.js](../../backend/src/routes/auth.routes.js), [error.middleware.js](../../backend/src/middlewares/error.middleware.js), [auditoría externa](../security/external-security-audit.md). | No-store no borra datos ya copiados; revisar logs, alertas y custodia de secretos operativos. |
 | **Transporte y base:** HTTPS/TLS observados; PostgreSQL externo limitado manualmente a la IP actual /32 y conexión interna del backend conservada. | [auditoría externa](../security/external-security-audit.md). | No se probó rechazo desde una segunda IP; la regla /32 debe actualizarse si cambia la IP autorizada. |

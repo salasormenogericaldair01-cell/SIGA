@@ -1,7 +1,7 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const { sequelize, User, Course } = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -24,23 +24,24 @@ function call(method, path, user, body) {
 
 async function safe(pending, status) {
   const response = await pending.expect(status);
-  expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|"token"\s*:|PrismaClient|"stack"\s*:|postgresql:\/\/|SELECT\s+.+FROM/i);
+  expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|"token"\s*:|Sequelize|"stack"\s*:|postgresql:\/\/|SELECT\s+.+FROM/i);
   return response;
 }
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL);
-  const [target] = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await sequelize.query('SELECT current_database() AS name, inet_server_port() AS port');
+  const [target] = rows;
   if (!['127.0.0.1', 'localhost'].includes(url.hostname) || url.port !== '5433'
       || url.pathname !== '/siga_test' || target.name !== 'siga_test' || target.port !== 5433) {
     throw new Error('Estas pruebas requieren exclusivamente siga_test en localhost:5433');
   }
   verified = true;
   for (const role of ['ADMIN', 'SECRETARIA', 'DOCENTE', 'ESTUDIANTE']) {
-    const user = await prisma.user.create({ data: {
+    const user = await User.create({
       email: `contract-${randomUUID()}@test.invalid`, passwordHash: 'not-used-for-login',
       firstName: 'Contrato', lastName: role, role,
-    } });
+    });
     users[role] = user;
     ids.users.push(user.id);
   }
@@ -48,10 +49,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (verified) {
-    await prisma.course.deleteMany({ where: { id: { in: ids.courses } } });
-    await prisma.user.deleteMany({ where: { id: { in: ids.users } } });
+    if (ids.courses.length) await Course.destroy({ where: { id: ids.courses } });
+    if (ids.users.length) await User.destroy({ where: { id: ids.users } });
   }
-  await prisma.$disconnect();
+  await sequelize.close();
 });
 
 test('contrato: rutas, envoltorios y permisos de los cuatro roles', async () => {
@@ -73,12 +74,11 @@ test('contrato: rutas, envoltorios y permisos de los cuatro roles', async () => 
     await request(app).get(`/api${path}`).expect(401);
     for (const [role, user] of Object.entries(users)) {
       const result = await call('get', `/api${path}`, user);
-      // Los perfiles son obligatorios para acceder a registros personales.
       const expected = roles.includes(role)
         ? (['DOCENTE', 'ESTUDIANTE'].includes(role) && ['/teaching-assignments', '/grade-records', '/attendance-records'].includes(path) ? 403 : 200)
         : 403;
       expect(result.status).toBe(expected);
-      expect(JSON.stringify(result.body)).not.toMatch(/passwordHash|tokenVersion|"token"\s*:|PrismaClient|"stack"\s*:|postgresql:\/\/|SELECT\s+.+FROM/i);
+      expect(JSON.stringify(result.body)).not.toMatch(/passwordHash|tokenVersion|"token"\s*:|Sequelize|"stack"\s*:|postgresql:\/\/|SELECT\s+.+FROM/i);
       if (expected === 200) {
         expect(Array.isArray(result.body[key])).toBe(true);
         if (key === 'data') expect(result.body.pagination).toEqual(expect.objectContaining({ page: 1, limit: 20, total: expect.any(Number) }));
@@ -90,8 +90,8 @@ test('contrato: rutas, envoltorios y permisos de los cuatro roles', async () => 
 });
 
 test('inyección y elevación rechazadas sin escritura inesperada', async () => {
-  const before = await prisma.course.count();
-  const beforeUser = await prisma.user.findUnique({ where: { id: users.ESTUDIANTE.id }, select: { role: true, isActive: true, tokenVersion: true, passwordHash: true, firstName: true, lastName: true } });
+  const before = await Course.count();
+  const beforeUser = await User.findByPk(users.ESTUDIANTE.id, { attributes: ['role', 'isActive', 'tokenVersion', 'passwordHash', 'firstName', 'lastName'], raw: true });
   await safe(request(app).post('/api/auth/login').send({ email: injection, password: 'anything' }), 400);
   await call('get', `/api/courses?search=${encodeURIComponent(injection)}`, users.ADMIN).expect(200);
   await call('get', `/api/students?search=${encodeURIComponent(injection)}`, users.ADMIN).expect(200);
@@ -105,8 +105,8 @@ test('inyección y elevación rechazadas sin escritura inesperada', async () => 
   await safe(call('patch', '/api/auth/me', users.ESTUDIANTE, { isActive: true }), 400);
   await safe(call('post', '/api/users', users.SECRETARIA, { role: 'ADMIN' }), 403);
   await safe(call('get', `/api/grade-records/${randomUUID()}`, users.ADMIN), 404);
-  expect(await prisma.course.count()).toBe(before);
-  expect(await prisma.user.findUnique({ where: { id: users.ESTUDIANTE.id }, select: { role: true, isActive: true, tokenVersion: true, passwordHash: true, firstName: true, lastName: true } })).toEqual(beforeUser);
+  expect(await Course.count()).toBe(before);
+  expect(await User.findByPk(users.ESTUDIANTE.id, { attributes: ['role', 'isActive', 'tokenVersion', 'passwordHash', 'firstName', 'lastName'], raw: true })).toEqual(beforeUser);
 });
 
 test('contrato de creación, duplicado, detalle y restricción de escritura', async () => {
@@ -119,24 +119,24 @@ test('contrato de creación, duplicado, detalle y restricción de escritura', as
   await safe(call('patch', `/api/courses/${created.body.data.id}`, users.DOCENTE, { name: 'No autorizado' }), 403);
   await safe(call('get', `/api/courses/${randomUUID()}`, users.ADMIN), 404);
   await safe(call('get', '/api/courses?page=0', users.ADMIN), 400);
-  expect((await prisma.course.findUnique({ where: { id: created.body.data.id } })).name).toBe('Contrato');
+  expect((await Course.findByPk(created.body.data.id)).name).toBe('Contrato');
 });
 
 test('JWT alterado, expirado, revocado e inactivo; cabeceras, CORS y límite de body', async () => {
   const user = users.SECRETARIA;
-  const beforeCount = await prisma.user.count();
-  const beforeHash = (await prisma.user.findUnique({ where: { id: user.id }, select: { passwordHash: true } })).passwordHash;
+  const beforeCount = await User.count();
+  const beforeHash = (await User.findByPk(user.id, { attributes: ['passwordHash'], raw: true })).passwordHash;
   const valid = bearer(user);
   await request(app).get('/api/auth/me').set('Authorization', valid).expect(200);
   await safe(request(app).get('/api/auth/me').set('Authorization', `${valid}x`), 401);
   await safe(request(app).get('/api/auth/me').set('Authorization', bearer(user, { expiresIn: '-1s' })), 401);
   const wrongKey = jwt.sign({ tokenVersion: 0 }, 'an-unrelated-signing-key', { algorithm: 'HS256', subject: user.id, expiresIn: '1h' });
   await safe(request(app).get('/api/auth/me').set('Authorization', `Bearer ${wrongKey}`), 401);
-  await prisma.user.update({ where: { id: user.id }, data: { tokenVersion: { increment: 1 } } });
+  await User.update({ tokenVersion: user.tokenVersion + 1 }, { where: { id: user.id } });
   await safe(request(app).get('/api/auth/me').set('Authorization', valid), 401);
-  const current = await prisma.user.findUnique({ where: { id: user.id } });
+  const current = await User.findByPk(user.id);
   await request(app).get('/api/auth/me').set('Authorization', bearer(current)).expect(200);
-  await prisma.user.update({ where: { id: user.id }, data: { isActive: false } });
+  await User.update({ isActive: false }, { where: { id: user.id } });
   await safe(request(app).get('/api/auth/me').set('Authorization', bearer(current)), 401);
 
   const allowedOrigin = process.env.CORS_ORIGIN;
@@ -147,8 +147,8 @@ test('JWT alterado, expirado, revocado e inactivo; cabeceras, CORS y límite de 
   expect(allowed.headers['x-content-type-options']).toBe('nosniff');
   expect(allowed.headers['x-powered-by']).toBeUndefined();
   await safe(request(app).post('/api/auth/login').send({ filler: 'x'.repeat(101 * 1024) }), 413);
-  expect(await prisma.user.count()).toBe(beforeCount);
-  expect((await prisma.user.findUnique({ where: { id: user.id }, select: { passwordHash: true } })).passwordHash).toBe(beforeHash);
+  expect(await User.count()).toBe(beforeCount);
+  expect((await User.findByPk(user.id, { attributes: ['passwordHash'], raw: true })).passwordHash).toBe(beforeHash);
 });
 
 test('login tiene límite local de intentos', async () => {

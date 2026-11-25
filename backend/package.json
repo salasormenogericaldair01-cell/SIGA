@@ -13,9 +13,7 @@
     "start": "node src/server.js",
     "test": "jest --runInBand",
     "test:integration": "node scripts/testing/run-integration-tests.js",
-    "prisma:validate": "prisma validate",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
+    "db:migrate": "node database/migrate.js",
     "seed:admin": "node scripts/setup/seed-admin.js",
     "seed:academic": "node scripts/setup/seed-academic.js",
     "verify:database-target": "node scripts/operations/verify-database-target.js",
@@ -36,7 +34,6 @@
     "clearMocks": true
   },
   "dependencies": {
-    "@prisma/client": "6.19.3",
     "bcrypt": "6.0.0",
     "cors": "2.8.6",
     "dotenv": "^18.0.4",
@@ -49,14 +46,8 @@
     "sequelize": "^6.37.8",
     "zod": "^4.6.5"
   },
-  "overrides": {
-    "@prisma/config": {
-      "deepmerge-ts": "8.0.0"
-    }
-  },
   "devDependencies": {
     "jest": "^30.5.2",
-    "prisma": "^6.19.3",
     "supertest": "^7.3.0"
   }
 }

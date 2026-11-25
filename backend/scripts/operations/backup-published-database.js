@@ -1,15 +1,14 @@
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
-const { PrismaClient } = require('@prisma/client');
+const { sequelize } = require('../../src/models');
 const {
   DATABASE, ControlledError, verifyDatabase, outsideRepository, archiveReadable, digest, hostDigest,
 } = require('./data-transition-core');
 
 async function main() {
-  const prisma = new PrismaClient();
   let target;
-  try { target = await verifyDatabase(prisma, process.env); }
-  finally { await prisma.$disconnect(); }
+  try { target = await verifyDatabase(sequelize, process.env); }
+  finally { await sequelize.close(); }
   const file = outsideRepository(process.env.BETA_BACKUP_FILE);
   if (fs.existsSync(file) || fs.existsSync(`${file}.receipt.json`)) throw new ControlledError('La ruta de respaldo ya existe');
   if (!fs.existsSync(require('node:path').dirname(file))) throw new ControlledError('Crea primero el directorio externo para el respaldo');

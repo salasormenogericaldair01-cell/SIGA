@@ -1,7 +1,19 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('node:crypto');
-const prisma = require('../../src/config/prisma');
+const {
+  sequelize,
+  User,
+  Teacher,
+  Student,
+  Enrollment,
+  Section,
+  AcademicPeriod,
+  Course,
+  TeachingAssignment,
+  EducationLevel,
+  Grade,
+} = require('../../src/models');
 const { createApp } = require('../../src/app');
 
 const app = createApp();
@@ -20,75 +32,83 @@ function auth(user) {
 
 beforeAll(async () => {
   const url = new URL(process.env.DATABASE_URL);
-  const [target] = await prisma.$queryRaw`SELECT current_database() AS name, inet_server_port() AS port`;
+  const [rows] = await sequelize.query('SELECT current_database() AS name, inet_server_port() AS port');
+  const [target] = rows;
   if (!['127.0.0.1', 'localhost'].includes(url.hostname) || url.port !== '5433' || url.pathname !== '/siga_test'
       || target.name !== 'siga_test' || target.port !== 5433) {
     throw new Error('La prueba de 125 matrículas exige siga_test en localhost:5433');
   }
   verified = true;
 
-  let grade = await prisma.grade.findFirst({ where: { isActive: true, educationLevel: { isActive: true } } });
+  let grade = await Grade.findOne({
+    where: { isActive: true },
+    include: [{ model: EducationLevel, as: 'educationLevel', where: { isActive: true }, required: true }],
+  });
   if (!grade) {
-    let level = await prisma.educationLevel.findFirst({ where: { isActive: true }, include: { grades: true } });
+    let level = await EducationLevel.findOne({
+      where: { isActive: true },
+      include: [{ model: Grade, as: 'grades' }],
+    });
     if (!level) {
-      const existing = await prisma.educationLevel.findMany({ select: { code: true } });
+      const existing = await EducationLevel.findAll({ attributes: ['code'], raw: true });
       const code = ['INICIAL', 'PRIMARIA', 'SECUNDARIA'].find((item) => !existing.some((entry) => entry.code === item));
       if (!code) throw new Error('No existe un nivel activo ni un código libre para la prueba');
-      level = await prisma.educationLevel.create({ data: { code, name: 'Nivel temporal' }, include: { grades: true } });
+      level = await EducationLevel.create({ code, name: 'Nivel temporal' });
+      level.grades = [];
       ids.levels.push(level.id);
     }
     const range = level.code === 'INICIAL' ? [3, 4, 5] : level.code === 'PRIMARIA' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
-    const order = range.find((number) => !level.grades.some((item) => item.order === number));
+    const order = range.find((number) => !(level.grades || []).some((item) => item.order === number));
     if (!order) throw new Error('No hay grado activo ni orden libre para la prueba');
-    grade = await prisma.grade.create({ data: { educationLevelId: level.id, name: 'Grado temporal', order } });
+    grade = await Grade.create({ educationLevelId: level.id, name: 'Grado temporal', order });
     ids.grades.push(grade.id);
   }
 
-  const period = await prisma.academicPeriod.create({ data: { name: `PR-${randomUUID()}`, startDate: new Date('2026-01-01'), endDate: new Date('2026-12-31') } });
+  const period = await AcademicPeriod.create({ name: `PR-${randomUUID()}`, startDate: '2026-01-01', endDate: '2026-12-31' });
   ids.periods.push(period.id);
-  const sections = await Promise.all(['A', 'B'].map((name) => prisma.section.create({ data: { gradeId: grade.id, academicPeriodId: period.id, name } })));
+  const sections = await Promise.all(['A', 'B'].map((name) => Section.create({ gradeId: grade.id, academicPeriodId: period.id, name })));
   ids.sections.push(...sections.map((item) => item.id));
 
   const people = [];
   for (const label of ['A', 'B']) {
-    const user = await prisma.user.create({ data: { email: `roster-${randomUUID()}@test.invalid`, passwordHash: 'not-used-for-login', firstName: 'Docente', lastName: label, role: 'DOCENTE' } });
+    const user = await User.create({ email: `roster-${randomUUID()}@test.invalid`, passwordHash: 'not-used-for-login', firstName: 'Docente', lastName: label, role: 'DOCENTE' });
     ids.users.push(user.id);
-    const teacher = await prisma.teacher.create({ data: { userId: user.id } });
+    const teacher = await Teacher.create({ userId: user.id });
     ids.teachers.push(teacher.id);
     people.push({ user, teacher });
   }
   [first, second] = people;
-  const courses = await Promise.all(['A', 'B'].map((name) => prisma.course.create({ data: { code: `ROSTER-${randomUUID()}`.toUpperCase(), name: `Curso ${name}` } })));
+  const courses = await Promise.all(['A', 'B'].map((name) => Course.create({ code: `ROSTER-${randomUUID()}`.toUpperCase(), name: `Curso ${name}` })));
   ids.courses.push(...courses.map((item) => item.id));
-  assignmentA = await prisma.teachingAssignment.create({ data: { courseId: courses[0].id, sectionId: sections[0].id, teacherId: first.teacher.id } });
-  assignmentB = await prisma.teachingAssignment.create({ data: { courseId: courses[1].id, sectionId: sections[1].id, teacherId: second.teacher.id } });
+  assignmentA = await TeachingAssignment.create({ courseId: courses[0].id, sectionId: sections[0].id, teacherId: first.teacher.id });
+  assignmentB = await TeachingAssignment.create({ courseId: courses[1].id, sectionId: sections[1].id, teacherId: second.teacher.id });
   ids.assignments.push(assignmentA.id, assignmentB.id);
 
-  const students = Array.from({ length: 126 }, (_, index) => ({ id: randomUUID(), studentCode: `ROSTER-${randomUUID()}`.toUpperCase(), firstName: `Alumno ${index + 1}`, lastName: 'Temporal', birthDate: new Date('2012-01-01') }));
-  await prisma.student.createMany({ data: students });
+  const students = Array.from({ length: 126 }, (_, index) => ({ id: randomUUID(), studentCode: `ROSTER-${randomUUID()}`.toUpperCase(), firstName: `Alumno ${index + 1}`, lastName: 'Temporal', birthDate: '2012-01-01' }));
+  await Student.bulkCreate(students);
   ids.students.push(...students.map((item) => item.id));
   const enrollments = students.map((student, index) => ({ id: randomUUID(), studentId: student.id, sectionId: index < 125 ? sections[0].id : sections[1].id, academicPeriodId: period.id }));
-  await prisma.enrollment.createMany({ data: enrollments });
+  await Enrollment.bulkCreate(enrollments);
   ids.enrollments.push(...enrollments.map((item) => item.id));
 });
 
 afterAll(async () => {
   if (verified) {
-    await prisma.enrollment.deleteMany({ where: { id: { in: ids.enrollments } } });
-    await prisma.teachingAssignment.deleteMany({ where: { id: { in: ids.assignments } } });
-    await prisma.student.deleteMany({ where: { id: { in: ids.students } } });
-    await prisma.teacher.deleteMany({ where: { id: { in: ids.teachers } } });
-    await prisma.section.deleteMany({ where: { id: { in: ids.sections } } });
-    await prisma.academicPeriod.deleteMany({ where: { id: { in: ids.periods } } });
-    await prisma.course.deleteMany({ where: { id: { in: ids.courses } } });
-    await prisma.grade.deleteMany({ where: { id: { in: ids.grades } } });
-    await prisma.educationLevel.deleteMany({ where: { id: { in: ids.levels } } });
-    await prisma.user.deleteMany({ where: { id: { in: ids.users } } });
-    expect(await prisma.enrollment.count({ where: { id: { in: ids.enrollments } } })).toBe(0);
-    expect(await prisma.student.count({ where: { id: { in: ids.students } } })).toBe(0);
-    expect(await prisma.teachingAssignment.count({ where: { id: { in: ids.assignments } } })).toBe(0);
+    if (ids.enrollments.length) await Enrollment.destroy({ where: { id: ids.enrollments } });
+    if (ids.assignments.length) await TeachingAssignment.destroy({ where: { id: ids.assignments } });
+    if (ids.students.length) await Student.destroy({ where: { id: ids.students } });
+    if (ids.teachers.length) await Teacher.destroy({ where: { id: ids.teachers } });
+    if (ids.sections.length) await Section.destroy({ where: { id: ids.sections } });
+    if (ids.periods.length) await AcademicPeriod.destroy({ where: { id: ids.periods } });
+    if (ids.courses.length) await Course.destroy({ where: { id: ids.courses } });
+    if (ids.grades.length) await Grade.destroy({ where: { id: ids.grades } });
+    if (ids.levels.length) await EducationLevel.destroy({ where: { id: ids.levels } });
+    if (ids.users.length) await User.destroy({ where: { id: ids.users } });
+    expect(await Enrollment.count({ where: { id: ids.enrollments } })).toBe(0);
+    expect(await Student.count({ where: { id: ids.students } })).toBe(0);
+    expect(await TeachingAssignment.count({ where: { id: ids.assignments } })).toBe(0);
   }
-  await prisma.$disconnect();
+  await sequelize.close();
 });
 
 test('PostgreSQL: 125 matrículas paginadas y alcance exclusivo por docente', async () => {
@@ -113,9 +133,9 @@ test('PostgreSQL: 125 matrículas paginadas y alcance exclusivo por docente', as
   const foreignDetail = await request(app).get(`/api/teaching-assignments/${assignmentB.id}`).set('Authorization', auth(first.user)).expect(403);
   const missing = await request(app).get(`/api/teaching-assignments/${randomUUID()}`).set('Authorization', auth(first.user)).expect(404);
   for (const response of [deniedA, deniedB, foreignDetail, missing]) {
-    expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|"token"\s*:|PrismaClient|"stack"\s*:|postgresql:\/\/|SELECT\s+.+FROM/i);
+    expect(JSON.stringify(response.body)).not.toMatch(/passwordHash|tokenVersion|"token"\s*:|Sequelize|"stack"\s*:|postgresql:\/\/|SELECT\s+.+FROM/i);
   }
   const filtered = await request(app).get(`/api/teaching-assignments?teacherId=${second.teacher.id}`).set('Authorization', auth(first.user)).expect(200);
   expect(filtered.body.pagination.total).toBe(0);
-  expect(await prisma.enrollment.count({ where: { id: { in: ids.enrollments } } })).toBe(126);
+  expect(await Enrollment.count({ where: { id: ids.enrollments } })).toBe(126);
 });

@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { prisma, verifyLocalTestDatabase } = require('./target.cjs');
+const { sequelize, verifyLocalTestDatabase } = require('./target.cjs');
 
 const output = path.resolve(__dirname, 'results');
 const proofFile = path.join(output, 'server-proof.json');
@@ -31,12 +31,13 @@ async function main() {
   const start = Date.now();
   while (Date.now() - start < 120000) {
     const process = processStats(proof.pid);
-    const [database] = await prisma.$queryRaw`
+    const [rows] = await sequelize.query(`
       SELECT current_database() AS name, inet_server_port() AS port,
         current_setting('max_connections')::int AS maximum,
         (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database()) AS connections,
         (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND state = 'active') AS active
-    `;
+    `);
+    const [database] = rows;
     if (database.name !== 'siga_test' || database.port !== 5433) throw new Error('Destino PostgreSQL cambió');
     samples.push({ at: new Date().toISOString(), elapsedSeconds: (Date.now() - start) / 1000,
       apiCpuSeconds: process?.apiCpu ?? null, apiRssBytes: process?.apiRss ?? null,
@@ -69,4 +70,4 @@ async function main() {
 }
 
 main().catch((error) => { console.error(error.message); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(() => sequelize.close());
